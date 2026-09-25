@@ -1,10 +1,29 @@
-# Docker Control 完整镜像
-# = 官方 diancup 后端（闭源二进制，原样保留）+ 我们改造完成的纯 Docker 管理前端（直接打入镜像，无需挂载覆盖）
-# 基础镜像的多架构支持以 yjnas/diancup 官方为准
-FROM yjnas/diancup:latest
+# ============ 构建阶段：编译自有后端 ============
+FROM golang:1.23-alpine AS builder
 
-# 覆盖前端：改造后的完整 static（tradis 风格皮肤 + 横条仪表板 + 双栏端口页 + 品牌化）
-COPY static/ /app/static/
+WORKDIR /build
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download || true
+COPY backend/ .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/docker-control .
 
-# 继承官方镜像的 ENTRYPOINT/CMD/VOLUME，仅替换前端资产
+# ============ 运行阶段：纯净 alpine + 自有后端 + 补丁前端 ============
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates tzdata && \
+    adduser -D -u 1000 dcuser 2>/dev/null || true
+
+WORKDIR /app
+COPY --from=builder /out/docker-control ./docker-control
+COPY static/ ./static/
+
+ENV PORT=9527 \
+    DATA_DIR=/app/data \
+    STATIC_DIR=/app/static \
+    DOCKER_HOST=unix:///var/run/docker.sock \
+    TZ=Asia/Shanghai
+
+VOLUME ["/app/data"]
 EXPOSE 9527
+
+CMD ["/app/docker-control"]

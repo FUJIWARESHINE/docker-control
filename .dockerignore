@@ -1,0 +1,6 @@
+.git
+.github
+data
+*.md
+docker-compose.yml
+apply_*.py
