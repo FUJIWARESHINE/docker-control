@@ -15,7 +15,5 @@ services:
       - TZ=Asia/Shanghai
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
     labels:
       - docker-control.self=true    # 自保护标记：面板自身容器从容器列表剔除（防误操作）

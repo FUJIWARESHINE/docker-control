@@ -309,12 +309,12 @@ func (a *App) handleSystemInfo(w http.ResponseWriter, r *http.Request) {
 		info["proc_uptime"] = strings.TrimSpace(string(v))
 	}
 	var v struct {
-		ServerVersion string `json:"ServerVersion"`
-		Os            string `json:"Os"`
-		Arch          string `json:"Arch"`
+		Version string `json:"Version"`
+		Os      string `json:"Os"`
+		Arch    string `json:"Arch"`
 	}
 	if err := a.Docker.doJSON("GET", "/version", nil, nil, &v); err == nil {
-		info["docker_version"] = v.ServerVersion
+		info["docker_version"] = v.Version
 		info["docker_os"] = v.Os
 		info["docker_arch"] = v.Arch
 	}

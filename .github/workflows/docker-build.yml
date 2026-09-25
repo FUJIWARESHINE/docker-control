@@ -83,7 +83,7 @@ jobs:
           push: true
           tags: |
             ${{ steps.dh.outputs.repo }}:latest
-            ${{ steps.dh.outputs.repo }}:v0.6
+            ${{ steps.dh.outputs.repo }}:v1.0
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max

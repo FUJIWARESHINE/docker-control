@@ -10,8 +10,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/docker-control .
 # ============ 运行阶段：纯净 alpine ============
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates tzdata && \
-    adduser -D -u 1000 dcuser 2>/dev/null || true
+RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 COPY --from=builder /out/docker-control ./docker-control
@@ -26,6 +25,5 @@ ENV PORT=9527 \
 VOLUME ["/app/data"]
 EXPOSE 9527
 
-USER dcuser
-
+# 必须以 root 运行：docker.sock 属主为 root，非 root 无法访问（面板的核心能力依赖）
 CMD ["/app/docker-control"]
