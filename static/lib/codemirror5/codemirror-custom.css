@@ -1,0 +1,212 @@
+/* CodeMirror5 自定义样式 - 等宽字体和中文优化 */
+
+/* 设置等宽字体 - 强制等宽显示 */
+.CodeMirror {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+    font-size: 14px !important;
+    line-height: 1.5 !important;
+    /* 强制字符间距为0 */
+    letter-spacing: 0px !important;
+    word-spacing: 0px !important;
+    /* 禁用所有字体特性 */
+    font-feature-settings: normal !important;
+    font-kerning: none !important;
+    font-variant-ligatures: none !important;
+    text-rendering: geometricPrecision !important;
+    /* 强制等宽字符显示 */
+    font-stretch: normal !important;
+    font-variant: normal !important;
+}
+
+/* 确保所有文本元素都使用相同的等宽设置 */
+.CodeMirror *,
+.CodeMirror pre,
+.CodeMirror-line,
+.CodeMirror-lines,
+.CodeMirror-code,
+.CodeMirror-scroll,
+.CodeMirror-sizer,
+.CodeMirror-gutter,
+.CodeMirror-gutters,
+.CodeMirror-linenumber {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+    letter-spacing: 0px !important;
+    word-spacing: 0px !important;
+    font-feature-settings: normal !important;
+    font-kerning: none !important;
+    font-variant-ligatures: none !important;
+    text-rendering: geometricPrecision !important;
+}
+
+/* 强制空格字符等宽显示 */
+.CodeMirror pre span,
+.CodeMirror-line span {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+    letter-spacing: 0px !important;
+    word-spacing: 0px !important;
+    white-space: pre !important;
+}
+
+/* 制表符宽度设置 */
+.CodeMirror {
+    tab-size: 2 !important;
+    -moz-tab-size: 2 !important;
+    -o-tab-size: 2 !important;
+}
+
+.CodeMirror pre .cm-tab,
+.CodeMirror-line .cm-tab {
+    display: inline-block !important;
+    width: 2ch !important;
+    text-decoration: inherit !important;
+}
+
+/* 强制空格显示为等宽字符 */
+.CodeMirror pre,
+.CodeMirror-line {
+    white-space: pre !important;
+    word-break: keep-all !important;
+    word-wrap: normal !important;
+}
+
+
+/* 修复高度问题 - 确保编辑器占满容器 */
+.CodeMirror {
+    height: 100% !important;
+    min-height: 300px;
+}
+
+.CodeMirror-scroll {
+    height: 100% !important;
+    min-height: 300px;
+}
+
+/* 优化折叠按钮样式 */
+.CodeMirror-foldgutter {
+    width: 16px;
+}
+
+.CodeMirror-foldgutter-open,
+.CodeMirror-foldgutter-folded {
+    cursor: pointer;
+    font-family: monospace;
+}
+
+.CodeMirror-foldgutter-open:after {
+    content: "▼";
+    color: #666;
+}
+
+.CodeMirror-foldgutter-folded:after {
+    content: "▶";
+    color: #666;
+}
+
+/* 搜索对话框样式优化 */
+.CodeMirror-dialog {
+    font-family: 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', sans-serif;
+}
+
+.CodeMirror-dialog input {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+}
+
+/* 行号样式优化 */
+.CodeMirror-linenumber {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+    color: #999;
+    padding: 0 8px 0 0;
+}
+
+/* 光标样式 */
+.CodeMirror-cursor {
+    border-left: 2px solid #333;
+}
+
+/* 选中文本样式 */
+.CodeMirror-selected {
+    background: #d7d4f0 !important;
+}
+
+/* 匹配括号样式 */
+.CodeMirror-matchingbracket {
+    background: rgba(255, 255, 0, 0.3);
+    color: inherit !important;
+}
+
+/* 活动行样式 */
+.CodeMirror-activeline-background {
+    background: rgba(255, 255, 0, 0.1);
+}
+
+/* 缩进对齐线样式 */
+.CodeMirror-lines {
+    position: relative;
+}
+
+/* 缩进对齐线容器 */
+.indent-guides {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* 单条缩进线 */
+.indent-line {
+    position: absolute;
+    width: 1px;
+    background-color: rgba(128, 128, 128, 0.2);
+    pointer-events: none;
+}
+
+/* 深色主题下的缩进线 */
+.cm-s-monokai .indent-line {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 缩进线悬停效果 */
+.CodeMirror-line:hover ~ .indent-guides .indent-line {
+    background-color: rgba(128, 128, 128, 0.4);
+}
+
+.cm-s-monokai .CodeMirror-line:hover ~ .indent-guides .indent-line {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 更好的缩进线实现 - 使用伪元素 */
+.CodeMirror pre.CodeMirror-line {
+    position: relative;
+}
+
+/* 为有缩进的行添加缩进线 */
+.CodeMirror pre.CodeMirror-line[data-indent]::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(
+        to right,
+        transparent,
+        transparent calc(var(--indent-size, 2ch) - 1px),
+        rgba(128, 128, 128, 0.2) calc(var(--indent-size, 2ch) - 1px),
+        rgba(128, 128, 128, 0.2) var(--indent-size, 2ch)
+    );
+    width: calc(var(--indent-level, 0) * var(--indent-size, 2ch));
+}
+
+/* 深色主题下的缩进线 */
+.cm-s-monokai pre.CodeMirror-line[data-indent]::before {
+    background-image: repeating-linear-gradient(
+        to right,
+        transparent,
+        transparent calc(var(--indent-size, 2ch) - 1px),
+        rgba(255, 255, 255, 0.1) calc(var(--indent-size, 2ch) - 1px),
+        rgba(255, 255, 255, 0.1) var(--indent-size, 2ch)
+    );
+}

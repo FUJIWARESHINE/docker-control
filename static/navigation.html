@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+        // desktop=true时强制使用桌面视口宽度
+        if (new URLSearchParams(window.location.search).get('desktop') === 'true') {
+            document.querySelector('meta[name="viewport"]').setAttribute('content', 'width=1280, initial-scale=0.3');
+        }
+    </script>
+    <title>diancup</title>
+    <!-- Favicon -->
+    <link rel="icon" href="/static/ico.png?v=2" type="image/png">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192x192.png">
+    <!-- 版本控制脚本（必须最先加载） -->
+    <script src="/static/js/version.min.js?v=latest-2603271513"></script>
+    <!-- 主题配色系统 -->
+    <script src="/static/js/THEME_COLORS.min.js?v=latest-2603271513"></script>
+    <!-- 字体文件必须在主CSS之前加载 -->
+    <link rel="stylesheet" href="/static/fonts/cybernav-fonts.css">
+    <link rel="stylesheet" href="/static/fonts/remixicon.css">
+    <link rel="stylesheet" href="/static/css/cybernav.min.css?v=latest-2603271513">
+    <!-- 预加载自定义CSS，防止页面闪烁 -->
+    <script>
+        (function() {
+            // 检查是否为安全模式
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('safe') === '1') {
+                console.log('[安全模式] 已禁用自定义 CSS/JS');
+                return;
+            }
+            
+            // 同步加载自定义CSS（使用XMLHttpRequest同步请求）
+            try {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', '/api/navigation/preferences', false); // false = 同步请求
+                xhr.send(null);
+                
+                if (xhr.status === 200) {
+                    const data = JSON.parse(xhr.responseText);
+                    const customCss = data.preferences?.nav_custom_css;
+                    
+                    if (customCss && customCss.trim()) {
+                        const style = document.createElement('style');
+                        style.id = 'custom-user-css-preload';
+                        style.textContent = customCss;
+                        document.head.appendChild(style);
+                    }
+                }
+            } catch (e) {
+                console.error('预加载自定义CSS失败:', e);
+            }
+        })();
+    </script>
+</head>
+<body>
+    <!-- 动态背景 -->
+    <div class="cyber-bg">
+        <div class="grid-lines"></div>
+    </div>
+
+    <!-- 左侧分组面板 -->
+    <div class="sidebar-hover-zone" id="sidebarHoverZone">
+        <i class="ri-arrow-right-s-line sidebar-arrow"></i>
+    </div>
+    <!-- 侧边栏蒙版（手机端点击关闭） -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    <aside class="sidebar" id="sidebar">
+        <button class="sidebar-close-btn" id="sidebarCloseBtn" onclick="closeSidebar()">
+            <i class="ri-close-line"></i>
+        </button>
+        <div class="sidebar-content">
+            <div class="sidebar-header">
+                <h3>分类</h3>
+                <div class="sidebar-header-actions">
+                    <button class="sidebar-sort-category-btn" id="sortCategoryBtn" title="分组排序">
+                        <i class="ri-arrow-up-down-line"></i>
+                    </button>
+                    <button class="sidebar-add-category-btn" id="addCategoryBtn" title="添加分类">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <nav class="category-list" id="categoryList">
+                <!-- 分类将通过JS动态生成 -->
+            </nav>
+            <div class="sidebar-footer">
+                <button class="cyber-btn sidebar-add-btn" id="sidebarAddBtn" title="添加卡片">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span>添加卡片</span>
+                </button>
+                <div class="sidebar-info">
+                    <div class="sidebar-social-links">
+                        <a href="https://github.com/yjnas/diancup" target="_blank" title="GitHub"><i class="ri-github-fill"></i></a>
+                        <a href="https://t.me/diancup" target="_blank" title="Telegram 群组"><i class="ri-telegram-fill"></i></a>
+                        <a href="https://qm.qq.com/q/MbzYnXdaa4" target="_blank" title="QQ群"><i class="ri-qq-fill"></i></a>
+                    </div>
+                    <div class="sidebar-version" id="navVersionInfo">v-</div>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- 主容器 -->
+    <div class="container">
+        <!-- 头部 -->
+        <header class="cyber-header">
+            <div class="logo-container">
+                <img class="site-logo" id="siteLogo" src="" alt="" style="display:none;">
+                <h1 class="glitch" id="siteTitle" data-text="DIANCUP">DIANCUP</h1>
+                <p class="tagline" id="siteSubtitle">// NAS导航页·容器管理·系统监控</p>
+            </div>
+            <div class="header-controls">
+                <!-- 网络模式切换 -->
+                <div class="network-switcher" id="networkSwitcher">
+                    <button class="cyber-btn network-btn" id="networkBtn" title="网络模式">
+                        <span class="btn-content">
+                            <!-- 自动模式图标 - WiFi信号/自动检测 -->
+                            <svg class="icon-network icon-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                                <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                                <line x1="12" y1="20" x2="12.01" y2="20"></line>
+                            </svg>
+                            <!-- 内网图标 - 房子/家庭网络 -->
+                            <svg class="icon-network icon-lan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                            <!-- 公网图标 - 云/互联网 -->
+                            <svg class="icon-network icon-wan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+                                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+                            </svg>
+                            <!-- STUN穿透图标 - 穿透/隧道 -->
+                            <svg class="icon-network icon-stun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none;">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M2 12h20"></path>
+                                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                            </svg>
+                            <span class="network-label" id="networkLabel">自动</span>
+                        </span>
+                    </button>
+                    <div class="network-dropdown" id="networkDropdown">
+                        <button type="button" class="network-option" data-mode="auto">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                                <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                                <line x1="12" y1="20" x2="12.01" y2="20"></line>
+                            </svg>
+                            <span>自动</span>
+                            <small>智能检测网络环境</small>
+                        </button>
+                        <button type="button" class="network-option" data-mode="lan">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                            <span>内网</span>
+                            <small>使用局域网地址</small>
+                        </button>
+                        <button type="button" class="network-option" data-mode="wan">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+                            </svg>
+                            <span>公网</span>
+                            <small>使用互联网地址</small>
+                        </button>
+                        <button type="button" class="network-option" data-mode="stun">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                                <path d="M2 17l10 5 10-5"></path>
+                                <path d="M2 12l10 5 10-5"></path>
+                            </svg>
+                            <span>STUN穿透</span>
+                            <small>使用Lucky穿透地址</small>
+                        </button>
+                    </div>
+                </div>
+                <button class="cyber-btn theme-toggle" id="themeToggle" title="切换主题">
+                    <span class="btn-content">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="13.5" cy="6.5" r="2.5"></circle>
+                            <circle cx="19" cy="13" r="2"></circle>
+                            <circle cx="7.5" cy="7.5" r="2"></circle>
+                            <circle cx="5" cy="15" r="2.5"></circle>
+                            <circle cx="12" cy="18" r="2"></circle>
+                        </svg>
+                    </span>
+                </button>
+                <!-- 管理按钮（进入后台） -->
+                <a href="/dashboard" class="cyber-btn admin-btn" id="adminBtn" title="管理后台">
+                    <span class="btn-content">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="3" width="7" height="7"></rect>
+                            <rect x="14" y="14" width="7" height="7"></rect>
+                            <rect x="3" y="14" width="7" height="7"></rect>
+                        </svg>
+                    </span>
+                </a>
+                <!-- 更多菜单 -->
+                <div class="more-menu-container" id="moreMenuContainer">
+                    <button class="cyber-btn more-btn" id="moreBtn" title="更多">
+                        <span class="btn-content">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <circle cx="12" cy="5" r="2"></circle>
+                                <circle cx="12" cy="12" r="2"></circle>
+                                <circle cx="12" cy="19" r="2"></circle>
+                            </svg>
+                        </span>
+                    </button>
+                    <div class="more-dropdown" id="moreDropdown">
+                        <button type="button" class="more-option" id="menuLoginBtn" data-action="login">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                                <polyline points="10 17 15 12 10 7"></polyline>
+                                <line x1="15" y1="12" x2="3" y2="12"></line>
+                            </svg>
+                            <span>登录</span>
+                        </button>
+                        <button type="button" class="more-option" id="menuSettingsBtn" data-action="settings">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                            <span>设置</span>
+                        </button>
+                        <div class="more-divider"></div>
+                        <button type="button" class="more-option danger" id="menuLogoutBtn" data-action="logout">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                                <polyline points="16 17 21 12 16 7"></polyline>
+                                <line x1="21" y1="12" x2="9" y2="12"></line>
+                            </svg>
+                            <span>退出登录</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- 赛博朋克时间显示 + 搜索栏 -->
+        <div class="cyber-time-search" id="cyberTimeSearch">
+            <!-- 左侧时间 -->
+            <div class="cyber-time-display">
+                <span class="cyber-time-digit" id="cyberTimeHours">00</span>
+                <span class="cyber-time-colon">:</span>
+                <span class="cyber-time-digit" id="cyberTimeMinutes">00</span>
+                <span class="cyber-time-colon cyber-blink">:</span>
+                <span class="cyber-time-digit" id="cyberTimeSeconds">00</span>
+            </div>
+            <!-- 右侧搜索栏 -->
+            <div class="cyber-search-box">
+                <button class="search-engine-btn" id="searchEngineBtn" title="点击切换搜索引擎">
+                    <!-- 百度图标 -->
+                    <svg class="engine-icon engine-baidu" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M5.927 12.497c2.063-.443 1.782-2.909 1.72-3.448-.101-.87-.992-2.052-2.244-1.927-1.541.154-1.736 2.059-1.736 2.059-.211 1.247.79 3.477 2.26 3.316zm3.46-6.166c1.063 0 1.926-1.181 1.926-2.635C11.313 2.243 10.45 1 9.387 1 8.323 1 7.46 2.243 7.46 3.696c0 1.454.863 2.635 1.927 2.635zm4.769.648c1.477.132 2.36-1.333 2.553-2.465.193-1.132-.442-2.478-1.792-2.652-1.35-.175-2.387 1.093-2.533 2.378-.146 1.284.295 2.607 1.772 2.739zm5.103 2.138c0-.001-1.446-1.937-3.067-.907-1.621 1.03-1.074 3.073-1.074 3.073.376 1.588 1.678 2.035 2.651 2.035.973 0 1.926-.65 2.229-1.478.303-.828.261-2.722-.739-2.723zm-3.066 6.161s-1.063-.49-2.138-.49c-.357 0-.715.047-1.063.14-.348.093-.696.233-1.034.42-.339.186-.668.419-.987.698-.319.28-.628.606-.927.978-.299.372-.588.79-.867 1.254-.279.464-.548.974-.807 1.53-.259.556-.508 1.158-.747 1.806-.239.648-.468 1.342-.687 2.082h8.257c-.219-.74-.448-1.434-.687-2.082-.239-.648-.488-1.25-.747-1.806-.259-.556-.528-1.066-.807-1.53-.279-.464-.568-.882-.867-1.254-.299-.372-.608-.698-.927-.978-.319-.28-.648-.512-.987-.698-.339-.187-.686-.327-1.034-.42-.348-.093-.706-.14-1.063-.14-1.075 0-2.138.49-2.138.49s-2.063 1.17-2.063 3.313c0 2.143 1.538 3.313 1.538 3.313s.89.909 2.063.909h8.257c1.173 0 2.063-.909 2.063-.909s1.538-1.17 1.538-3.313c0-2.143-2.063-3.313-2.063-3.313z"/>
+                    </svg>
+                    <!-- Google图标 -->
+                    <svg class="engine-icon engine-google" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
+                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                    <!-- Bing图标 -->
+                    <svg class="engine-icon engine-bing" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
+                        <path d="M5 3v16.5l4.5 2.5 8-4.5v-5l-6-2.5V3L5 3zm4.5 13.5l-2-1V7l2 1v8.5zm4 .5l-2.5 1.5V12l2.5 1v4z" fill="#00897B"/>
+                    </svg>
+                    <!-- DuckDuckGo图标 -->
+                    <svg class="engine-icon engine-duckduckgo" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15.5c-2.49 0-4.5-2.01-4.5-4.5S8.51 8.5 11 8.5s4.5 2.01 4.5 4.5-2.01 4.5-4.5 4.5zm5.5-4.5c0 .28-.22.5-.5.5s-.5-.22-.5-.5.22-.5.5-.5.5.22.5.5z" fill="#DE5833"/>
+                    </svg>
+                </button>
+                <input type="text" id="searchInput" placeholder="加载中..." autocomplete="off">
+                <button class="search-btn" id="searchBtn" title="搜索">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="M21 21l-4.35-4.35"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 当前分类标题 -->
+        <div class="current-category" id="currentCategory">
+            <span class="category-icon">◈</span>
+            <span class="category-name">全部</span>
+            <button class="category-actions-btn" id="categoryActionsBtn" title="操作">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+            </button>
+            <div class="category-actions-dropdown" id="categoryActionsDropdown">
+                <button type="button" class="action-item" id="addLinkAction">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    <span>添加卡片</span>
+                </button>
+                <button type="button" class="action-item" id="sortLinksAction">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="4" y1="9" x2="20" y2="9"></line>
+                        <line x1="4" y1="15" x2="20" y2="15"></line>
+                        <line x1="10" y1="3" x2="8" y2="21"></line>
+                        <line x1="16" y1="3" x2="14" y2="21"></line>
+                    </svg>
+                    <span>排序</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 卡片网格 -->
+        <main class="cards-grid" id="cardsGrid">
+            <!-- 卡片将通过JS动态生成 -->
+        </main>
+
+        <!-- 空状态提示 -->
+        <div class="empty-state" id="emptyState">
+            <div class="empty-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"></path>
+                </svg>
+            </div>
+            <h3>还没有卡片</h3>
+            <p>点击侧边栏或分组名称后面的展开按钮添加你的第一个卡片</p>
+        </div>
+    </div>
+
+    <!-- 添加/编辑链接模态框 -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal cyber-modal">
+            <div class="modal-header">
+                <h2 id="modalTitle">添加卡片</h2>
+                <button class="modal-close" id="modalClose">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <form class="modal-form" id="linkForm">
+              <div class="modal-form-grid">
+                <div class="form-group">
+                    <label for="linkName">名称</label>
+                    <input type="text" id="linkName" placeholder="例如：GitHub" required>
+                </div>
+                <div class="form-group">
+                    <label for="linkUrlLan">内网地址</label>
+                    <div class="input-with-btn">
+                        <input type="url" id="linkUrlLan" placeholder="http://192.168.1.100:8080">
+                        <button type="button" class="cyber-btn small-btn fetch-icon-btn" id="fetchIconBtnLan" title="从内网地址获取图标"><i class="ri-image-line"></i></button>
+                    </div>
+                    <small class="form-hint">局域网访问地址（可选）</small>
+                </div>
+                <div class="form-group">
+                    <label for="linkUrlWan">公网地址</label>
+                    <div class="input-with-btn">
+                        <input type="url" id="linkUrlWan" placeholder="https://example.com">
+                        <button type="button" class="cyber-btn small-btn fetch-icon-btn" id="fetchIconBtn" title="从网页获取图标"><i class="ri-image-line"></i></button>
+                    </div>
+                    <small class="form-hint">互联网访问地址（可选）</small>
+                </div>
+                <div class="form-group">
+                    <label for="linkUrlStun">STUN穿透地址</label>
+                    <input type="url" id="linkUrlStun" placeholder="http://example.com">
+                    <small class="form-hint">STUN穿透基础地址，端口将从Lucky组件自动获取（可选）</small>
+                </div>
+                <input type="hidden" id="linkUrl" value="">
+                <div class="form-group">
+                    <label for="linkCategory">分类</label>
+                    <select id="linkCategory">
+                        <!-- 分类选项将通过JS动态生成 -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="linkCardType">卡片类型</label>
+                    <select id="linkCardType">
+                        <option value="normal">普通链接</option>
+                        <option value="widget">组件卡片</option>
+                        <option value="container">容器卡片</option>
+                        <option value="system">系统卡片</option>
+                    </select>
+                </div>
+              </div>
+                <!-- 系统卡片选择区域 -->
+                <div class="form-group system-config-section" id="systemConfigSection" style="display: none;">
+                    <label for="linkSystemType">系统功能</label>
+                    <select id="linkSystemType">
+                        <option value="">选择系统功能...</option>
+                        <option value="dashboard" data-icon="ri-dashboard-3-fill">仪表盘</option>
+                        <option value="containers" data-icon="ri-server-fill">容器管理</option>
+                        <option value="projects" data-icon="ri-folder-fill">Compose 项目</option>
+                        <option value="files" data-icon="ri-folder-3-fill">文件管理</option>
+                        <option value="images" data-icon="ri-stack-fill">镜像管理</option>
+                        <option value="networks" data-icon="ri-global-line">网络管理</option>
+                        <option value="volumes" data-icon="ri-hard-drive-2-fill">存储卷</option>
+                        <option value="probe" data-icon="ri-radar-fill">昱君探针</option>
+                        <option value="settings" data-icon="ri-settings-4-fill">系统设置</option>
+                        <option value="about" data-icon="ri-information-fill">关于</option>
+                    </select>
+                    <small class="form-hint">选择要添加的系统功能卡片（手机和电脑通用）</small>
+                </div>
+                <div class="form-group widget-config-section" id="widgetConfigSection" style="display: none;">
+                    <label for="linkWidgetType">组件类型</label>
+                    <select id="linkWidgetType">
+                        <option value="">选择组件...</option>
+                        <option value="emby">Emby</option>
+                        <option value="jellyfin">Jellyfin</option>
+                        <option value="qbittorrent">qBittorrent</option>
+                        <option value="transmission">Transmission</option>
+                        <option value="moviepilot">MoviePilot</option>
+                        <option value="host_stats">主机监控</option>
+                        <option value="openwrt">OpenWrt</option>
+                        <option value="openclash">OpenClash</option>
+                        <option value="lucky">Lucky</option>
+                    </select>
+                    <small class="form-hint">组件将显示实时数据</small>
+                </div>
+                <!-- 组件配置详情 -->
+                <div class="widget-config-details" id="widgetConfigDetails" style="display: none;">
+                    <div class="form-group" id="widgetApiUrlGroup">
+                        <label for="widgetApiUrl">API 地址</label>
+                        <input type="url" id="widgetApiUrl" placeholder="http://192.168.1.100:8096">
+                        <small class="form-hint">组件服务的访问地址</small>
+                    </div>
+                    <div class="form-group" id="widgetApiKeyGroup">
+                        <label for="widgetApiKey">API Key</label>
+                        <input type="text" id="widgetApiKey" placeholder="输入 API Key">
+                        <small class="form-hint">用于认证的 API 密钥</small>
+                    </div>
+                    <div class="form-group" id="widgetLibraryGroup" style="display: none;">
+                        <label>媒体库选择</label>
+                        <button type="button" class="cyber-btn small-btn" id="fetchLibrariesBtn">获取媒体库</button>
+                        <div id="libraryCheckboxes" class="library-checkboxes" style="margin-top: 0.5rem;"></div>
+                        <small class="form-hint">选择要展示轮播的媒体库（不选则展示全部）</small>
+                    </div>
+                    <div class="form-group" id="widgetUsernameGroup" style="display: none;">
+                        <label for="widgetUsername">用户名</label>
+                        <input type="text" id="widgetUsername" placeholder="输入用户名">
+                    </div>
+                    <div class="form-group" id="widgetPasswordGroup" style="display: none;">
+                        <label for="widgetPassword">密码</label>
+                        <input type="password" id="widgetPassword" placeholder="输入密码">
+                    </div>
+                    <div class="form-group" id="widgetRpcPathGroup" style="display: none;">
+                        <label for="widgetRpcPath">RPC 路径</label>
+                        <input type="text" id="widgetRpcPath" placeholder="/transmission/rpc">
+                        <small class="form-hint">Transmission RPC 路径（默认 /transmission/rpc）</small>
+                    </div>
+                    <div class="form-group" id="widgetMoviePilotCacheGroup" style="display: none;">
+                        <label>媒体缓存</label>
+                        <button type="button" class="cyber-btn small-btn" id="refreshMoviePilotCacheBtn">
+                            <i class="ri-refresh-line"></i> 刷新缓存
+                        </button>
+                        <div id="moviePilotCacheStatus" style="margin-top: 0.5rem; font-size: 0.8rem; color: var(--text-secondary);"></div>
+                        <small class="form-hint">手动刷新MoviePilot订阅媒体的图片缓存</small>
+                    </div>
+                </div>
+                <div class="form-group container-config-section" id="containerConfigSection" style="display: none;">
+                    <label for="linkContainerId">关联容器</label>
+                    <select id="linkContainerId">
+                        <option value="">选择容器...</option>
+                        <!-- 容器选项将通过JS动态生成 -->
+                    </select>
+                    <small class="form-hint">显示容器运行状态</small>
+                </div>
+              <div class="modal-form-grid">
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="linkIsPublic" checked>
+                        <span class="checkbox-text">公开显示</span>
+                    </label>
+                    <small class="form-hint">取消勾选后仅登录用户可见</small>
+                </div>
+                <div class="form-group">
+                    <label>图标</label>
+                    <div class="icon-selector">
+                        <div class="icon-preview" id="iconPreview">
+                            <span class="icon-letter">A</span>
+                        </div>
+                        <div class="icon-options">
+                            <button type="button" class="icon-option-btn" id="uploadIconBtn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="3" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="3" width="7" height="7"></rect>
+                                    <rect x="14" y="14" width="7" height="7"></rect>
+                                    <rect x="3" y="14" width="7" height="7"></rect>
+                                </svg>
+                                <span>选择图标</span>
+                            </button>
+                            <input type="file" id="iconFileInput" accept="image/*" hidden>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group" style="display:none;">
+                    <label>图标颜色</label>
+                    <div class="color-picker">
+                        <button type="button" class="color-option" data-color="#ff006e" style="--color: #ff006e"></button>
+                        <button type="button" class="color-option" data-color="#00f5ff" style="--color: #00f5ff"></button>
+                        <button type="button" class="color-option" data-color="#ffbe0b" style="--color: #ffbe0b"></button>
+                        <button type="button" class="color-option" data-color="#8338ec" style="--color: #8338ec"></button>
+                        <button type="button" class="color-option" data-color="#3a86ff" style="--color: #3a86ff"></button>
+                        <button type="button" class="color-option" data-color="#06ffa5" style="--color: #06ffa5"></button>
+                    </div>
+                </div>
+              </div>
+                <input type="hidden" id="linkColor" value="#00f5ff">
+                <input type="hidden" id="linkIcon" value="">
+                <input type="hidden" id="linkId" value="">
+                <div class="form-actions">
+                    <button type="button" class="cyber-btn cancel-btn" id="cancelBtn">取消</button>
+                    <button type="submit" class="cyber-btn submit-btn">
+                        <span class="btn-content">保存</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 设置模态框 -->
+    <div class="modal-overlay" id="settingsModalOverlay">
+        <div class="modal cyber-modal settings-modal">
+            <div class="modal-header">
+                <h2>设置</h2>
+                <button class="modal-close" id="settingsModalClose">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="settings-content">
+                <!-- ========== 基本设置 ========== -->
+                <div class="settings-section">
+                    <h3><i class="ri-home-4-line"></i> 网站信息</h3>
+                    <div class="settings-item">
+                        <label>网站标题</label>
+                        <input type="text" id="siteTitleInput" placeholder="导航页标题" class="settings-input">
+                    </div>
+                    <div class="settings-item">
+                        <label>副标题</label>
+                        <input type="text" id="siteSubtitleInput" placeholder="副标题（可选）" class="settings-input">
+                    </div>
+                    <div class="settings-item">
+                        <label>浏览器标签标题</label>
+                        <input type="text" id="siteTabTitleInput" placeholder="浏览器标签页显示的标题" class="settings-input">
+                    </div>
+                    <div class="settings-item">
+                        <label>网站Logo</label>
+                        <div class="settings-logo-row">
+                            <div class="settings-logo-preview" id="siteLogoPreview">
+                                <span style="color:var(--text-secondary);font-size:0.75rem;">无</span>
+                            </div>
+                            <button type="button" class="cyber-btn small-btn" id="siteLogoPickBtn">选择图标</button>
+                            <button type="button" class="cyber-btn small-btn" id="siteLogoClearBtn" style="opacity:0.6;">清除</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== 外观设置 ========== -->
+                <div class="settings-section">
+                    <h3><i class="ri-palette-line"></i> 外观设置</h3>
+                    <div class="settings-item">
+                        <label>主题配色</label>
+                        <select id="themeColorSelect" class="settings-select">
+                            <!-- 主题选项将通过JS动态生成 -->
+                        </select>
+                    </div>
+                    <div class="settings-item">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="showTimeToggle" checked>
+                            <span class="checkbox-text">显示时间</span>
+                        </label>
+                        <small class="form-hint">关闭后隐藏页面顶部的时间显示</small>
+                    </div>
+                    <div class="settings-item">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="showSearchToggle" checked>
+                            <span class="checkbox-text">显示搜索框</span>
+                        </label>
+                        <small class="form-hint">关闭后隐藏页面顶部的搜索框</small>
+                    </div>
+                </div>
+
+                <!-- ========== 背景设置 ========== -->
+                <div class="settings-section">
+                    <h3><i class="ri-image-line"></i> 电脑端背景</h3>
+                    <div class="settings-item">
+                        <label>图片链接</label>
+                        <div class="background-setting">
+                            <input type="text" id="backgroundUrlInput" placeholder="输入图片URL或留空">
+                            <button type="button" class="cyber-btn small-btn" id="applyBgUrlBtn">应用</button>
+                        </div>
+                    </div>
+                    <div class="settings-item">
+                        <label>上传图片</label>
+                        <div class="background-setting">
+                            <button type="button" class="cyber-btn small-btn" id="uploadBgBtn">选择文件</button>
+                            <input type="file" id="bgFileInput" accept="image/*" hidden>
+                        </div>
+                    </div>
+                    <div class="settings-item">
+                        <label>已上传图片</label>
+                        <div class="bg-gallery" id="bgGallery">
+                            <div class="bg-loading">加载中...</div>
+                        </div>
+                    </div>
+                    <div class="settings-item">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="bgRandomToggle">
+                            <span class="checkbox-text">随机切换背景</span>
+                        </label>
+                    </div>
+                    <div class="settings-item" id="bgIntervalItem" style="display:none">
+                        <label>切换间隔(秒)</label>
+                        <input type="number" id="bgIntervalInput" value="30" min="5" max="3600" class="settings-input">
+                    </div>
+                    <div class="settings-item">
+                        <label>背景模糊度</label>
+                        <div class="blur-slider-container">
+                            <input type="range" id="bgBlurSlider" min="0" max="20" value="0" step="1" class="blur-slider">
+                            <span class="blur-value" id="bgBlurValue">0px</span>
+                        </div>
+                    </div>
+                    <div class="settings-item">
+                        <label>背景遮罩透明度</label>
+                        <div class="blur-slider-container">
+                            <input type="range" id="bgOpacitySlider" min="0" max="80" value="15" step="5" class="blur-slider">
+                            <span class="blur-value" id="bgOpacityValue">15%</span>
+                        </div>
+                        <small class="form-hint">调整遮罩深浅以提升文字可读性</small>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3><i class="ri-smartphone-line"></i> 手机端背景</h3>
+                    <div class="settings-item">
+                        <label>上传手机背景</label>
+                        <div class="background-setting">
+                            <button type="button" class="cyber-btn small-btn" id="uploadPhoneBgBtn">选择文件</button>
+                            <input type="file" id="phoneBgFileInput" accept="image/*" hidden>
+                        </div>
+                    </div>
+                    <div class="settings-item">
+                        <label>已上传手机背景</label>
+                        <div class="bg-gallery" id="phoneBgGallery">
+                            <div class="bg-loading">加载中...</div>
+                        </div>
+                    </div>
+                    <div class="settings-item">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="phoneBgRandomToggle">
+                            <span class="checkbox-text">随机切换手机背景</span>
+                        </label>
+                    </div>
+                    <div class="settings-item" id="phoneBgIntervalItem" style="display:none">
+                        <label>切换间隔(秒)</label>
+                        <input type="number" id="phoneBgIntervalInput" value="30" min="5" max="3600" class="settings-input">
+                    </div>
+                </div>
+
+                <!-- ========== 功能设置 ========== -->
+                <div class="settings-section">
+                    <h3><i class="ri-global-line"></i> 网络设置</h3>
+                    <div class="settings-item">
+                        <label>DIANCUP 内网地址</label>
+                        <div class="background-setting">
+                            <input type="text" id="lanServerUrlInput" placeholder="http://192.168.1.100:9527" class="settings-input" style="flex:1;">
+                            <button type="button" class="cyber-btn small-btn" id="saveLanServerUrlBtn">保存</button>
+                        </div>
+                        <small class="form-hint">设置后系统将自动检测内外网环境，智能切换访问地址</small>
+                    </div>
+                    <div class="settings-item">
+                        <label>STUN 穿透域名</label>
+                        <div class="background-setting">
+                            <input type="text" id="stunDomainInput" placeholder="stun.example.com" class="settings-input" style="flex:1;">
+                            <button type="button" class="cyber-btn small-btn" id="saveStunDomainBtn">保存</button>
+                        </div>
+                        <small class="form-hint">通过此域名访问时，自动切换到 STUN 穿透模式</small>
+                    </div>
+                    <div class="settings-item">
+                        <div class="lan-status-display" id="lanStatusDisplay">
+                            <span class="lan-status-label">当前网络状态：</span>
+                            <span class="lan-status-value" id="lanStatusValue">未检测</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3><i class="ri-dashboard-3-line"></i> 组件设置</h3>
+                    <div class="settings-item">
+                        <label>刷新间隔(秒)</label>
+                        <input type="number" id="widgetRefreshInterval" value="10" min="5" max="3600" class="settings-input">
+                        <small class="form-hint">所有组件卡片的数据刷新间隔，默认10秒</small>
+                    </div>
+                </div>
+
+                <!-- ========== 数据管理 ========== -->
+                <div class="settings-section">
+                    <h3><i class="ri-bookmark-line"></i> 书签导入</h3>
+                    <div class="settings-item">
+                        <label>导入浏览器书签</label>
+                        <div class="background-setting">
+                            <button type="button" class="cyber-btn small-btn" id="importBookmarksBtn"><i class="ri-upload-2-line"></i> 选择书签文件</button>
+                            <input type="file" id="bookmarksFileInput" accept=".html,.htm" hidden>
+                        </div>
+                        <small class="form-hint">支持 Chrome/Edge/Firefox 导出的书签 HTML 文件</small>
+                    </div>
+                </div>
+
+                <!-- ========== 高级设置 ========== -->
+                <div class="settings-section">
+                    <h3><i class="ri-plug-line"></i> 浏览器插件</h3>
+                    <div class="settings-item">
+                        <label>API Key</label>
+                        <small class="form-hint">用于 Chrome 浏览器插件快速添加网站到导航页</small>
+                    </div>
+                    <div class="settings-item">
+                        <div class="apikey-list" id="apikeyList">
+                            <div class="bg-loading">加载中...</div>
+                        </div>
+                    </div>
+                    <div class="settings-item">
+                        <button type="button" class="cyber-btn small-btn" id="generateApikeyBtn" style="width:100%;"><i class="ri-refresh-line"></i> 生成新 Key</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3><i class="ri-code-s-slash-line"></i> 自定义代码</h3>
+                    <div class="settings-item">
+                        <div style="margin-bottom:0.75rem;padding:0.5rem 0.75rem;background:rgba(255,71,87,0.15);border:1px solid rgba(255,71,87,0.3);border-radius:var(--radius-sm);color:#ff4757;font-size:0.75rem;">
+                            <i class="ri-error-warning-fill"></i> <strong>安全警告：</strong>自定义代码可能带来安全风险！如果页面出现问题，请在 URL 后添加 <code style="background:rgba(0,0,0,0.3);padding:0.1rem 0.3rem;border-radius:3px;">?safe=1</code> 禁用自定义代码。
+                        </div>
+                    </div>
+                    <div class="settings-item">
+                        <label>自定义 CSS</label>
+                        <textarea id="customCssInput" class="settings-textarea" placeholder="/* 在此输入自定义 CSS */" rows="4"></textarea>
+                    </div>
+                    <div class="settings-item">
+                        <label>自定义 JavaScript</label>
+                        <textarea id="customJsInput" class="settings-textarea" placeholder="// 在此输入自定义 JavaScript" rows="4"></textarea>
+                    </div>
+                    <div class="settings-item">
+                        <button type="button" class="cyber-btn small-btn" id="saveCustomCodeBtn" style="width:100%;"><i class="ri-save-line"></i> 保存自定义代码</button>
+                    </div>
+                </div>
+
+                <!-- ========== 关于 ========== -->
+                <div class="settings-section settings-about">
+                    <h3><i class="ri-information-line"></i> 关于</h3>
+                    <div class="about-info-compact">
+                        <div class="about-brand">
+                            <span class="about-name">DianCup</span>
+                            <span class="about-ver">导航页</span>
+                        </div>
+                        <div class="about-links">
+                            <a href="https://t.me/diancup" target="_blank" title="Telegram 群组"><i class="ri-telegram-fill"></i> 群组</a>
+                            <a href="https://github.com/yjnas/diancup" target="_blank" title="GitHub"><i class="ri-github-fill"></i> GitHub</a>
+                        </div>
+                        <div class="about-donate">
+                            <span class="about-donate-title"><i class="ri-gift-fill"></i> 打赏支持</span>
+                            <div class="about-donate-qr">
+                                <div class="donate-item">
+                                    <img src="/static/zfb.png" alt="支付宝" onerror="this.parentNode.style.display='none'">
+                                    <span><i class="ri-alipay-fill"></i> 支付宝</span>
+                                </div>
+                                <div class="donate-item">
+                                    <img src="/static/wx.png" alt="微信" onerror="this.parentNode.style.display='none'">
+                                    <span><i class="ri-wechat-pay-fill"></i> 微信</span>
+                                </div>
+                            </div>
+                            <a href="https://www.ifdian.net/a/yjnas" target="_blank" class="about-afdian-link">
+                                <i class="ri-heart-fill"></i> 爱发电
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分类编辑模态框 -->
+    <div class="modal-overlay" id="categoryModalOverlay">
+        <div class="modal cyber-modal category-modal">
+            <div class="modal-header">
+                <h2 id="categoryModalTitle">添加分类</h2>
+                <button class="modal-close" id="categoryModalClose">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <form class="modal-form" id="categoryForm">
+                <div class="form-group">
+                    <label for="categoryName">分类名称</label>
+                    <input type="text" id="categoryName" placeholder="例如：工作" required>
+                </div>
+                <div class="form-group">
+                    <label for="categoryIcon">图标符号</label>
+                    <input type="text" id="categoryIcon" placeholder="例如：◈ ◉ ⚙ ⌘ ▶ ✦" maxlength="2">
+                    <div class="icon-suggestions">
+                        <button type="button" class="icon-suggest" data-icon="◈">◈</button>
+                        <button type="button" class="icon-suggest" data-icon="◉">◉</button>
+                        <button type="button" class="icon-suggest" data-icon="⚙">⚙</button>
+                        <button type="button" class="icon-suggest" data-icon="⌘">⌘</button>
+                        <button type="button" class="icon-suggest" data-icon="▶">▶</button>
+                        <button type="button" class="icon-suggest" data-icon="✦">✦</button>
+                        <button type="button" class="icon-suggest" data-icon="★">★</button>
+                        <button type="button" class="icon-suggest" data-icon="♦">♦</button>
+                        <button type="button" class="icon-suggest" data-icon="●">●</button>
+                        <button type="button" class="icon-suggest" data-icon="◆">◆</button>
+                        <button type="button" class="icon-suggest" data-icon="▣">▣</button>
+                        <button type="button" class="icon-suggest" data-icon="⬡">⬡</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="categoryIsPublic" checked>
+                        <span class="checkbox-text">公开显示</span>
+                    </label>
+                    <small class="form-hint">取消勾选后仅登录用户可见</small>
+                </div>
+                <input type="hidden" id="categoryId" value="">
+                <div class="form-actions">
+                    <button type="button" class="cyber-btn cancel-btn" id="categoryCancelBtn">取消</button>
+                    <button type="submit" class="cyber-btn submit-btn">
+                        <span class="btn-content">保存</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div class="context-menu" id="contextMenu">
+        <button class="context-item context-item-auth" data-action="edit">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+            <span>编辑</span>
+        </button>
+        <button class="context-item context-item-auth" data-action="delete">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>删除</span>
+        </button>
+        <button class="context-item context-item-auth" data-action="copy">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span>复制链接</span>
+        </button>
+        <div class="context-divider context-item-network" id="contextNetworkDivider"></div>
+        <button class="context-item context-item-network" data-action="open-wan" id="contextOpenWan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="2" y1="12" x2="22" y2="12"></line>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+            </svg>
+            <span>访问公网地址</span>
+        </button>
+        <button class="context-item context-item-network" data-action="open-lan" id="contextOpenLan">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                <line x1="6" y1="18" x2="6.01" y2="18"></line>
+            </svg>
+            <span>访问内网地址</span>
+        </button>
+        <button class="context-item" data-action="open-stun" id="contextOpenStun" style="display:none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5"></path>
+                <path d="M2 12l10 5 10-5"></path>
+            </svg>
+            <span>访问STUN穿透地址</span>
+        </button>
+    </div>
+
+    <!-- 图标选择弹窗 -->
+    <div class="modal-overlay" id="iconPickerOverlay">
+        <div class="modal cyber-modal" style="max-width:800px;width:90vw;">
+            <div class="modal-header">
+                <h2>选择图标</h2>
+                <button class="modal-close" id="iconPickerClose">&times;</button>
+            </div>
+            <div style="padding:12px 16px;border-bottom:1px solid var(--glass-border);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                <input type="text" id="iconPickerSearch" placeholder="搜索图标..." style="flex:1;min-width:150px;padding:8px 12px;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--radius-sm);color:var(--text-primary);outline:none;font-size:0.85rem;">
+                <label style="padding:8px 12px;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--radius-sm);color:var(--text-secondary);cursor:pointer;font-size:0.8rem;white-space:nowrap;display:flex;align-items:center;gap:4px;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    上传
+                    <input type="file" id="iconPickerUpload" accept="image/*" hidden>
+                </label>
+            </div>
+            <div id="iconPickerGrid" style="padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px;max-height:45vh;overflow-y:auto;">
+                <div style="grid-column:1/-1;text-align:center;color:var(--text-secondary);padding:2rem;">加载中...</div>
+            </div>
+            <div id="iconPickerPagination" style="padding:8px 16px;border-top:1px solid var(--glass-border);display:flex;justify-content:center;align-items:center;gap:12px;">
+                <button type="button" id="iconPagePrev" style="padding:6px 16px;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--radius-sm);color:var(--text-primary);cursor:pointer;font-size:0.8rem;">上一页</button>
+                <span id="iconPageInfo" style="font-size:0.8rem;color:var(--text-secondary);">1 / 1</span>
+                <button type="button" id="iconPageNext" style="padding:6px 16px;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--radius-sm);color:var(--text-primary);cursor:pointer;font-size:0.8rem;">下一页</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 提示消息 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- 自定义确认/输入弹窗 -->
+    <div class="cyber-dialog-overlay" id="cyberDialogOverlay">
+        <div class="cyber-dialog">
+            <div class="cyber-dialog-header">
+                <span class="cyber-dialog-icon" id="cyberDialogIcon"></span>
+                <h3 class="cyber-dialog-title" id="cyberDialogTitle">确认</h3>
+            </div>
+            <div class="cyber-dialog-body" id="cyberDialogBody">
+                <p class="cyber-dialog-message" id="cyberDialogMessage"></p>
+                <input type="text" class="cyber-dialog-input" id="cyberDialogInput" style="display:none;" autocomplete="off">
+            </div>
+            <div class="cyber-dialog-footer">
+                <button class="cyber-btn cyber-dialog-cancel" id="cyberDialogCancel">取消</button>
+                <button class="cyber-btn cyber-dialog-confirm" id="cyberDialogConfirm">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量操作模态框 -->
+    <div class="modal-overlay" id="batchModal">
+        <div class="modal cyber-modal batch-modal">
+            <div class="modal-header">
+                <h3><i class="ri-checkbox-multiple-line"></i> 批量操作</h3>
+                <button class="modal-close" onclick="closeBatchModal()">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="batch-info">
+                    <span>已选择 <strong id="batchSelectedCount">0</strong> 个链接</span>
+                </div>
+                
+                <div class="batch-actions">
+                    <!-- 迁移分组 -->
+                    <div class="batch-action-group">
+                        <label class="batch-action-label">
+                            <i class="ri-folder-transfer-line"></i> 迁移到分组
+                        </label>
+                        <div class="batch-action-row">
+                            <select id="batchCategorySelect" class="cyber-select">
+                                <option value="">选择目标分组...</option>
+                            </select>
+                            <button class="cyber-btn batch-action-btn" onclick="batchMoveCategory()">
+                                <i class="ri-arrow-right-line"></i> 迁移
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 可见性设置 -->
+                    <div class="batch-action-group">
+                        <label class="batch-action-label">
+                            <i class="ri-eye-line"></i> 可见性设置
+                        </label>
+                        <div class="batch-action-row batch-visibility-btns">
+                            <button class="cyber-btn batch-action-btn" onclick="batchSetVisibility(true)">
+                                <i class="ri-eye-line"></i> 设为公开
+                            </button>
+                            <button class="cyber-btn batch-action-btn" onclick="batchSetVisibility(false)">
+                                <i class="ri-eye-off-line"></i> 设为私有
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 删除 -->
+                    <div class="batch-action-group batch-danger-group">
+                        <label class="batch-action-label">
+                            <i class="ri-delete-bin-line"></i> 危险操作
+                        </label>
+                        <div class="batch-action-row">
+                            <button class="cyber-btn batch-action-btn danger" onclick="batchDelete()">
+                                <i class="ri-delete-bin-line"></i> 批量删除
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="cyber-btn batch-action-btn" onclick="closeBatchModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- OpenClash 详情模态框 -->
+    <div class="modal-overlay" id="openclashModal">
+        <div class="modal cyber-modal openclash-modal" style="max-width: 900px; width: 95vw; height: 80vh;">
+            <div class="modal-header">
+                <h3><i class="ri-shield-flash-line"></i> OpenClash</h3>
+                <button class="modal-close" onclick="closeOpenClashModal()"><i class="ri-close-line"></i></button>
+            </div>
+            <div class="openclash-tabs">
+                <button class="openclash-tab active" data-tab="proxies" onclick="switchOpenClashTab('proxies')">
+                    <i class="ri-node-tree"></i> 节点
+                </button>
+                <button class="openclash-tab" data-tab="connections" onclick="switchOpenClashTab('connections')">
+                    <i class="ri-link"></i> 连接 <span id="openclashConnCount" class="tab-badge">0</span>
+                </button>
+                <button class="openclash-tab" data-tab="logs" onclick="switchOpenClashTab('logs')">
+                    <i class="ri-file-list-3-line"></i> 日志
+                </button>
+            </div>
+            <div class="openclash-content" style="flex: 1; overflow: hidden;">
+                <div class="openclash-panel active" id="openclashProxiesPanel" style="height: 100%; overflow-y: auto;">
+                    <div id="openclashProxiesList" class="openclash-list"></div>
+                </div>
+                <div class="openclash-panel" id="openclashConnectionsPanel" style="height: 100%; overflow-y: auto;">
+                    <div id="openclashConnectionsList" class="openclash-list"></div>
+                </div>
+                <div class="openclash-panel" id="openclashLogsPanel" style="height: 100%; overflow-y: auto;">
+                    <div id="openclashLogsList" class="openclash-logs"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 更新成功弹窗 -->
+    <div class="modal-overlay" id="updateSuccessModal" style="z-index: 10000; align-items: flex-start; padding-top: 20px;">
+        <div class="modal" id="updateSuccessModalContent" style="max-width: 600px; max-height: 85vh; transform: translateY(-100%); transition: transform 0.3s ease-out;">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--neon-green) 0%, var(--neon-cyan) 100%);">
+                <h3 style="color: white; display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="ri-checkbox-circle-fill"></i> 更新完成
+                </h3>
+                <button class="modal-close" onclick="closeUpdateSuccessModal()" style="color: white;">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 0; overflow: hidden;">
+                <!-- 顶部图标和版本信息 -->
+                <div style="text-align: center; padding: 0.75rem 1rem; background: linear-gradient(180deg, rgba(0, 255, 136, 0.1) 0%, var(--bg-secondary) 100%);">
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                        <i class="ri-checkbox-circle-fill" style="font-size: 1.5rem; color: var(--neon-green);"></i>
+                        <span style="font-size: 1.1rem; font-weight: 600; color: var(--text-primary);">更新成功！</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                        当前版本: <code id="updateSuccessVersion" style="background: rgba(0, 255, 136, 0.1); color: var(--neon-green); padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-weight: 600; font-size: 0.8rem;">-</code>
+                    </div>
+                </div>
+                <!-- 更新日志内容区域 -->
+                <div id="updateLogContent" style="padding: 1rem; max-height: 450px; overflow-y: auto; border-top: 1px solid var(--border-color);">
+                    <div style="text-align: center; color: var(--text-tertiary); padding: 2rem;">
+                        <i class="ri-loader-4-line" style="animation: spin 1s linear infinite;"></i> 加载更新日志...
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="cyber-btn primary" onclick="closeUpdateSuccessModal()" style="min-width: 120px;">
+                    <i class="ri-check-line"></i> 我知道了
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 更新成功弹窗脚本 -->
+    <script>
+    // 检查更新成功状态（公开接口，无需登录）
+    async function checkUpdateSuccessStatus() {
+        try {
+            const response = await fetch('/api/public/update-success/status');
+            if (!response.ok) return;
+
+            const data = await response.json();
+            if (data.success && data.need_show_popup) {
+                showUpdateSuccessModal(data.current_version || data.update_success_version);
+            }
+        } catch (error) {
+            console.error('检查更新成功状态失败:', error);
+        }
+    }
+
+    // 显示更新成功弹窗
+    async function showUpdateSuccessModal(version) {
+        const modal = document.getElementById('updateSuccessModal');
+        const modalContent = document.getElementById('updateSuccessModalContent');
+        const versionEl = document.getElementById('updateSuccessVersion');
+        const contentEl = document.getElementById('updateLogContent');
+
+        if (!modal || !modalContent) return;
+
+        // 设置版本号
+        if (versionEl) {
+            versionEl.textContent = version || '-';
+        }
+
+        // 显示弹窗（添加 show 类来触发 CSS 动画）
+        modal.classList.add('show');
+        // 延迟一帧后触发滑入动画
+        requestAnimationFrame(() => {
+            modalContent.style.transform = 'translateY(0)';
+        });
+
+        // 加载更新日志（公开接口）
+        try {
+            const response = await fetch('/api/public/update-log');
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.content) {
+                    const escapedContent = data.content
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;');
+                    const contentWithLinks = escapedContent.replace(
+                        /\[([^\]]+)\]\(([^)]+)\)/g,
+                        '<a href="$2" target="_blank" rel="noopener noreferrer" style="color: var(--neon-cyan); text-decoration: none;">$1</a>'
+                    );
+                    const finalContent = contentWithLinks.replace(/\n/g, '<br>');
+                    contentEl.innerHTML = '<div style="font-size: 0.8rem; line-height: 1.6; color: var(--text-secondary); white-space: pre-wrap; word-break: break-word;">' + finalContent + '</div>';
+                } else {
+                    contentEl.innerHTML = '<div style="text-align: center; color: var(--text-tertiary); padding: 1rem; font-size: 0.85rem;"><i class="ri-file-text-line" style="font-size: 1.2rem; margin-bottom: 0.25rem; display: block;"></i>暂无更新日志</div>';
+                }
+            } else {
+                contentEl.innerHTML = '<div style="text-align: center; color: var(--text-tertiary); padding: 1rem; font-size: 0.85rem;"><i class="ri-file-text-line" style="font-size: 1.2rem; margin-bottom: 0.25rem; display: block;"></i>暂无更新日志</div>';
+            }
+        } catch (error) {
+            contentEl.innerHTML = '<div style="text-align: center; color: var(--text-tertiary); padding: 1rem; font-size: 0.85rem;"><i class="ri-file-text-line" style="font-size: 1.2rem; margin-bottom: 0.25rem; display: block;"></i>暂无更新日志</div>';
+        }
+    }
+
+    // 关闭更新成功弹窗
+    async function closeUpdateSuccessModal() {
+        const modal = document.getElementById('updateSuccessModal');
+        const modalContent = document.getElementById('updateSuccessModalContent');
+        if (!modal) return;
+
+        // 发送确认请求（公开接口）
+        try {
+            await fetch('/api/public/update-success/acknowledge', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+        } catch (error) {
+            console.error('确认更新成功状态失败:', error);
+        }
+
+        // 先触发滑出动画
+        if (modalContent) {
+            modalContent.style.transform = 'translateY(-100%)';
+        }
+        // 延迟后移除 show 类
+        setTimeout(() => {
+            modal.classList.remove('show');
+        }, 300);
+    }
+
+    // 页面加载完成后检查更新成功状态（无需登录）
+    document.addEventListener('DOMContentLoaded', function() {
+        // 延迟检查，确保其他初始化完成
+        setTimeout(function() {
+            checkUpdateSuccessStatus();
+        }, 1000);
+    });
+    </script>
+
+    <!-- 预加载自定义JS，尽早执行 -->
+    <script>
+        (function() {
+            // 检查是否为安全模式
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('safe') === '1') {
+                return;
+            }
+            
+            // 异步加载自定义JS（不阻塞页面渲染）
+            fetch('/api/navigation/preferences')
+                .then(response => response.json())
+                .then(data => {
+                    const customJs = data.preferences?.nav_custom_js;
+                    
+                    if (customJs && customJs.trim()) {
+                        try {
+                            const script = document.createElement('script');
+                            script.id = 'custom-user-js-preload';
+                            script.textContent = customJs;
+                            document.body.appendChild(script);
+                            console.log('[自定义JS] 预加载执行完成');
+                        } catch (e) {
+                            console.error('预加载自定义JS失败:', e);
+                        }
+                    }
+                })
+                .catch(e => {
+                    console.error('获取自定义JS失败:', e);
+                });
+        })();
+    </script>
+    <script src="/static/js/cybernav.min.js?v=latest-2603271513"></script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+{
+  "name": "DIANCUP",
+  "short_name": "DIANCUP",
+  "description": "Docker容器管理、宿主机监控工具，提供多服务器切换管理，Web界面和Telegram Bot交互方式",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#00ff88",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/static/logo.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "容器管理",
+      "short_name": "容器",
+      "description": "查看Docker容器列表",
+      "url": "/dashboard?view=containers",
+      "icons": [{ "src": "/static/logo.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "导航页",
+      "short_name": "导航",
+      "description": "打开导航页",
+      "url": "/nav",
+      "icons": [{ "src": "/static/logo.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "文件管理",
+      "short_name": "文件",
+      "description": "打开文件管理",
+      "url": "/dashboard?view=filemanager",
+      "icons": [{ "src": "/static/logo.png", "sizes": "192x192" }]
+    }
+  ]
+}

@@ -1,0 +1,926 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Docker Control</title>
+    <link rel="icon" href="/static/ico.png?v=2" type="image/png">
+    <script src="/static/js/version.min.js?v=latest-2603271513"></script>
+    <!-- 字体文件必须在主CSS之前加载 -->
+    <link rel="stylesheet" href="/static/fonts/cybernav-fonts.css">
+    <link rel="stylesheet" href="/static/fonts/remixicon.css">
+    <link rel="stylesheet" href="/static/css/style.min.css?v=latest-2603271513">
+    <script src="/static/js/THEME_COLORS.min.js?v=latest-2603271513"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            margin: 0; padding: 0; overflow: hidden; position: relative;
+            background: var(--bg);
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            transition: background 0.3s ease;
+        }
+        #login-particles-js {
+            position: absolute; width: 100%; height: 100%;
+            top: 0; left: 0; z-index: 0;
+        }
+        #loginPage {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: transparent; display: flex;
+            align-items: stretch; justify-content: center;
+        }
+        .login-wrapper {
+            display: flex; width: 100%; height: 100%;
+            position: relative; z-index: 1;
+        }
+        .login-left {
+            flex: 1; display: flex; flex-direction: column;
+            justify-content: center; padding: 3rem 4rem;
+            position: relative; overflow: hidden;
+        }
+        .login-left::before {
+            content: ''; position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, var(--primary-light) 0%, transparent 50%, var(--info-light) 100%);
+            opacity: 0.3; pointer-events: none;
+        }
+        .brand-section { margin-bottom: 2rem; position: relative; z-index: 1; }
+        .brand-logo { display: flex; align-items: center; gap: 1rem; margin-bottom: 0.5rem; }
+        .brand-logo img { width: 56px; height: 56px; filter: drop-shadow(0 4px 12px var(--shadow)); }
+        .brand-name { font-size: 2.2rem; font-weight: bold; letter-spacing: 8px; color: var(--primary); }
+        .brand-slogan { font-size: 1.1rem; color: var(--text-secondary); letter-spacing: 2px; margin-top: 0.3rem; }
+        .features-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr);
+            gap: 1rem; margin-bottom: 2rem; position: relative; z-index: 1;
+        }
+        .feature-item {
+            display: flex; flex-direction: column; align-items: center;
+            padding: 1.2rem 0.8rem; background: var(--bg-elevated);
+            border: 1px solid var(--border); border-radius: 12px;
+            cursor: default;
+        }
+        .feature-icon {
+            width: 48px; height: 48px; display: flex;
+            align-items: center; justify-content: center;
+            background: var(--primary-light); border-radius: 12px;
+            margin-bottom: 0.8rem; font-size: 1.5rem; color: var(--primary);
+        }
+        .feature-title { font-size: 0.85rem; color: var(--text); font-weight: 600; text-align: center; margin-bottom: 0.2rem; }
+        .feature-desc { font-size: 0.7rem; color: var(--text-secondary); text-align: center; line-height: 1.3; }
+        .login-footer-info {
+            display: flex; align-items: center; gap: 2rem;
+            padding-top: 2rem; border-top: 1px solid var(--border);
+            position: relative; z-index: 1;
+        }
+        .footer-stat { display: flex; flex-direction: column; }
+        .stat-value { font-size: 1.5rem; font-weight: bold; color: var(--primary); }
+        .stat-label { font-size: 0.85rem; color: var(--text-secondary); }
+        .login-right {
+            width: 560px; min-width: 480px; display: flex;
+            align-items: center; justify-content: center;
+            padding: 2rem 4rem; background: var(--bg-secondary);
+            border-left: 1px solid var(--border);
+        }
+        .login-container {
+            width: 100%; max-width: 400px; text-align: center;
+            position: relative; animation: slideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-40px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .login-title {
+            font-size: 2rem; margin-bottom: 0.5rem; color: var(--text);
+            font-weight: bold; letter-spacing: 12px; text-align: center;
+        }
+        .login-subtitle { color: var(--text-secondary); margin-bottom: 2.5rem; font-size: 1rem; letter-spacing: 1px; }
+        .form-group { margin-bottom: 1.2rem; text-align: left; }
+        .form-label { display: block; font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.5rem; font-weight: 500; }
+        .login-input {
+            width: 100%; background: var(--input-bg);
+            border: 2px solid var(--input-border); border-radius: 10px;
+            padding: 1rem 1.2rem; color: var(--text); font-size: 1rem;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); box-sizing: border-box;
+        }
+        .login-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px var(--primary-light); }
+        .login-input::placeholder { color: var(--input-placeholder); }
+        .login-button {
+            width: 100%; padding: 1rem; font-size: 1.1rem; border-radius: 10px;
+            background: var(--primary); border: none; color: var(--primary-text);
+            cursor: pointer; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            font-weight: bold; letter-spacing: 2px; margin-top: 0.5rem;
+        }
+        .login-button:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 8px 24px var(--shadow); }
+        .login-button:active:not(:disabled) { transform: translateY(0); background: var(--primary-active); }
+        .login-button:disabled { background: var(--button-disabled-bg); color: var(--button-disabled-text); cursor: not-allowed; }
+        .password-strength { margin-top: 0.5rem; display: none; }
+        .password-strength.show { display: block; }
+        .strength-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 0.3rem; }
+        .strength-fill { height: 100%; width: 0; transition: all 0.3s ease; border-radius: 2px; }
+        .strength-fill.weak { width: 33%; background: var(--danger); }
+        .strength-fill.medium { width: 66%; background: var(--warning); }
+        .strength-fill.strong { width: 100%; background: var(--success); }
+        .strength-text { font-size: 0.75rem; color: var(--text-secondary); }
+        .strength-text.weak { color: var(--danger); }
+        .strength-text.medium { color: var(--warning); }
+        .strength-text.strong { color: var(--success); }
+        .password-requirements { margin-top: 1rem; padding: 1rem; background: var(--info-light); border-radius: 8px; text-align: left; }
+        .password-requirements h4 { font-size: 0.85rem; color: var(--text); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .password-requirements ul { list-style: none; padding: 0; margin: 0; }
+        .password-requirements li { font-size: 0.8rem; color: var(--text-secondary); padding: 0.2rem 0; display: flex; align-items: center; gap: 0.5rem; }
+        .password-requirements li i { font-size: 0.9rem; }
+        .password-requirements li.valid { color: var(--success); }
+        .password-requirements li.invalid { color: var(--text-secondary); }
+        .forgot-password { margin-top: 1.5rem; text-align: center; }
+        .forgot-password a { color: var(--text-secondary); font-size: 0.9rem; text-decoration: none; cursor: pointer; transition: color 0.3s ease; }
+        .forgot-password a:hover { color: var(--primary); }
+        .password-hint-modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-overlay); display: none;
+            justify-content: center; align-items: center; z-index: 20000;
+        }
+        .password-hint-modal-overlay.show { display: flex; }
+        .password-hint-modal {
+            background: var(--bg-elevated); border: 1px solid var(--border);
+            border-radius: 20px; padding: 1.5rem; max-width: 500px; width: 90%;
+            box-shadow: 0 16px 48px var(--shadow-large);
+            animation: slideInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .password-hint-modal-header { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 1rem; padding-bottom: 0.8rem; border-bottom: 1px solid var(--border); }
+        .password-hint-modal-header i { font-size: 1.5rem; color: var(--primary); }
+        .password-hint-modal-header h3 { font-size: 1.1rem; color: var(--text); margin: 0; font-weight: 600; }
+        .password-hint-modal-body { color: var(--text-secondary); line-height: 1.5; font-size: 0.9rem; }
+        .password-hint-section { margin-bottom: 1rem; padding: 0.8rem 1rem; background: var(--primary-light); border-radius: 8px; border-left: 3px solid var(--primary); }
+        .password-hint-section.warning { background: var(--warning-light); border-left-color: var(--warning); }
+        .password-hint-section.danger { background: var(--danger-light); border-left-color: var(--danger); }
+        .password-hint-section strong { color: var(--text); display: block; margin-bottom: 0.3rem; font-size: 0.95rem; font-weight: 600; }
+        .password-hint-code { background: var(--code-bg); padding: 0.4rem 0.6rem; border-radius: 5px; font-family: monospace; font-size: 0.95rem; color: var(--primary); display: inline-block; border: 1px solid var(--code-border); font-weight: 600; }
+        .password-hint-modal-footer { margin-top: 1.2rem; text-align: right; }
+        .password-hint-modal-btn { padding: 0.6rem 1.5rem; background: var(--danger); border: none; border-radius: 8px; color: var(--danger-text); font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: all 0.3s ease; }
+        .password-hint-modal-btn:hover { background: var(--danger-hover); transform: translateY(-2px); }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideInUp { from { opacity: 0; transform: translateY(50px); } to { opacity: 1; transform: translateY(0); } }
+        #loginPage .notification-container { position: fixed; top: 80px; right: 20px; z-index: 10000; }
+        #loginPage .notification { background: var(--bg-elevated) !important; border: 1px solid var(--border) !important; border-radius: 12px !important; padding: 1.2rem; margin-bottom: 1rem; min-width: 300px; box-shadow: 0 8px 24px var(--shadow) !important; animation: slideInRight 0.3s ease-out; color: var(--text) !important; }
+        @keyframes slideInRight { from { opacity: 0; transform: translateX(100px); } to { opacity: 1; transform: translateX(0); } }
+        #loginPage .notification.error { border-color: var(--danger) !important; background: var(--danger-light) !important; }
+        #loginPage .notification.success { border-color: var(--success) !important; background: var(--success-light) !important; }
+        #loginPage::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-image: linear-gradient(var(--border-light) 1px, transparent 1px), linear-gradient(90deg, var(--border-light) 1px, transparent 1px); background-size: 50px 50px; opacity: 0.5; pointer-events: none; z-index: 0; }
+        @media (max-width: 1400px) {
+            .features-grid { grid-template-columns: repeat(3, 1fr); }
+            .login-left { padding: 2.5rem 3rem; }
+        }
+        @media (max-width: 1200px) {
+            .features-grid { grid-template-columns: repeat(2, 1fr); gap: 0.8rem; }
+            .login-left { padding: 2rem; }
+            .login-right { width: 480px; min-width: 400px; }
+            .highlights-list { gap: 0.5rem; }
+            .highlight-tag { padding: 0.4rem 0.8rem; font-size: 0.75rem; }
+        }
+        @media (max-width: 1000px) {
+            .login-wrapper { flex-direction: column; }
+            .login-left { display: none; }
+            .login-right { width: 100%; min-width: auto; flex: 1; border-left: none; }
+            .login-container { max-width: 420px; width: 90%; }
+        }
+        @media (max-width: 480px) {
+            .login-container { padding: 0 1rem; }
+            .login-title { font-size: 1.5rem; letter-spacing: 8px; }
+            .login-input { padding: 0.9rem 1rem; font-size: 1rem; }
+            .login-button { padding: 0.9rem; font-size: 1rem; }
+        }
+        /* 屏幕高度响应式 - 中等高度 */
+        @media (max-height: 900px) {
+            .login-left { padding: 2rem 3rem; }
+            .brand-section { margin-bottom: 1.5rem; }
+            .brand-logo img { width: 48px; height: 48px; }
+            .brand-name { font-size: 2rem; }
+            .brand-slogan { font-size: 1rem; }
+            .features-grid { gap: 0.8rem; margin-bottom: 1.5rem; }
+            .feature-item { padding: 1rem 0.6rem; }
+            .feature-icon { width: 40px; height: 40px; font-size: 1.2rem; margin-bottom: 0.5rem; }
+            .feature-title { font-size: 0.8rem; }
+            .feature-desc { font-size: 0.65rem; }
+            .login-footer-info { padding-top: 1.5rem; gap: 1.5rem; }
+            .stat-value { font-size: 1.2rem; }
+            .stat-label { font-size: 0.8rem; }
+        }
+        /* 屏幕高度响应式 - 较小高度 */
+        @media (max-height: 768px) {
+            .login-left { padding: 1.5rem 2.5rem; }
+            .brand-section { margin-bottom: 1rem; }
+            .brand-logo img { width: 40px; height: 40px; }
+            .brand-name { font-size: 1.8rem; letter-spacing: 6px; }
+            .brand-slogan { font-size: 0.9rem; margin-top: 0.2rem; }
+            .features-grid { gap: 0.6rem; margin-bottom: 1rem; }
+            .feature-item { padding: 0.8rem 0.5rem; border-radius: 8px; }
+            .feature-icon { width: 36px; height: 36px; font-size: 1.1rem; margin-bottom: 0.4rem; border-radius: 8px; }
+            .feature-title { font-size: 0.75rem; }
+            .feature-desc { display: none; }
+            .login-footer-info { padding-top: 1rem; gap: 1rem; }
+            .stat-value { font-size: 1rem; }
+            .stat-label { font-size: 0.75rem; }
+        }
+        /* 屏幕高度响应式 - 小高度 */
+        @media (max-height: 650px) {
+            .login-left { padding: 1rem 2rem; }
+            .brand-section { margin-bottom: 0.8rem; }
+            .brand-logo { margin-bottom: 0.3rem; gap: 0.8rem; }
+            .brand-logo img { width: 36px; height: 36px; }
+            .brand-name { font-size: 1.5rem; letter-spacing: 4px; }
+            .brand-slogan { font-size: 0.85rem; }
+            .features-grid { gap: 0.5rem; margin-bottom: 0.8rem; }
+            .feature-item { padding: 0.6rem 0.4rem; }
+            .feature-icon { width: 32px; height: 32px; font-size: 1rem; margin-bottom: 0.3rem; }
+            .feature-title { font-size: 0.7rem; }
+            .login-footer-info { display: none; }
+        }
+        /* 屏幕高度响应式 - 极小高度 */
+        @media (max-height: 550px) {
+            .login-left { padding: 0.8rem 1.5rem; }
+            .brand-section { margin-bottom: 0.5rem; }
+            .brand-logo img { width: 32px; height: 32px; }
+            .brand-name { font-size: 1.3rem; }
+            .brand-slogan { display: none; }
+            .features-grid { grid-template-columns: repeat(4, 1fr); gap: 0.4rem; margin-bottom: 0; }
+            .feature-item { padding: 0.5rem 0.3rem; }
+            .feature-icon { width: 28px; height: 28px; font-size: 0.9rem; margin-bottom: 0.2rem; }
+            .feature-title { font-size: 0.65rem; }
+        }
+    </style>
+</head>
+<body>
+    <div id="loginPage">
+        <div id="login-particles-js"></div>
+        <div class="notification-container" id="loginNotificationContainer"></div>
+        <div class="login-wrapper">
+            <div class="login-left">
+                <div class="brand-section">
+                    <div class="brand-logo">
+                        <img src="/static/logo.png" alt="Logo">
+                        <span class="brand-name">DIANCUP</span>
+                    </div>
+                    <div class="brand-slogan">智能容器管理 · 高效运维平台</div>
+                </div>
+                <div class="features-grid">
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-dashboard-3-line"></i></div>
+                        <div class="feature-title">仪表盘</div>
+                        <div class="feature-desc">系统资源一目了然</div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-stack-line"></i></div>
+                        <div class="feature-title">容器管理</div>
+                        <div class="feature-desc">全方位容器控制</div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-folder-fill"></i></div>
+                        <div class="feature-title">Compose项目</div>
+                        <div class="feature-desc">多容器编排部署</div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-compass-3-line"></i></div>
+                        <div class="feature-title">导航页</div>
+                        <div class="feature-desc">快捷网址导航</div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-chrome-line"></i></div>
+                        <div class="feature-title">浏览器插件</div>
+                        <div class="feature-desc">Chrome扩展支持</div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-smartphone-line"></i></div>
+                        <div class="feature-title">App</div>
+                        <div class="feature-desc">移动端应用</div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-folder-3-line"></i></div>
+                        <div class="feature-title">文件管理</div>
+                        <div class="feature-desc">宿主机文件操作</div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-terminal-box-line"></i></div>
+                        <div class="feature-title">SSH终端</div>
+                        <div class="feature-desc">Web终端与SFTP</div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-server-line"></i></div>
+                        <div class="feature-title">主机监控</div>
+                        <div class="feature-desc">CPU/内存/磁盘</div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-radar-line"></i></div>
+                        <div class="feature-title">昱君探针</div>
+                        <div class="feature-desc">多服务器监控</div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-time-line"></i></div>
+                        <div class="feature-title">定时任务</div>
+                        <div class="feature-desc">计划任务调度</div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon"><i class="ri-refresh-line"></i></div>
+                        <div class="feature-title">自动更新</div>
+                        <div class="feature-desc">镜像版本检测</div>
+                    </div>
+                </div>
+                <div class="login-footer-info">
+                    <div class="footer-stat"><span class="stat-value">轻量</span><span class="stat-label">资源占用</span></div>
+                    <div class="footer-stat"><span class="stat-value">安全</span><span class="stat-label">权限控制</span></div>
+                    <div class="footer-stat"><span class="stat-value">高效</span><span class="stat-label">运维体验</span></div>
+                    <div class="footer-stat"><span class="stat-value">稳定</span><span class="stat-label">持续运行</span></div>
+                </div>
+            </div>
+            <div class="login-right">
+                <div class="login-container">
+                    <div class="login-title">DIANCUP</div>
+                    <div id="loginFormSection">
+                        <div class="login-subtitle" id="loginSubtitle">请输入密码登录系统</div>
+                        <form id="loginForm" onsubmit="handleLogin(event); return false;">
+                            <div class="form-group">
+                                <input type="password" id="loginPassword" class="login-input" placeholder="请输入密码" autocomplete="off" autofocus />
+                            </div>
+                            <!-- 2FA验证码输入框（始终显示，可选填） -->
+                            <div class="form-group" id="totpCodeGroup">
+                                <input type="text" id="loginTotpCode" class="login-input" placeholder="如已启用2FA，请输入6位验证码" maxlength="6" pattern="[0-9]{6}" autocomplete="off" />
+                            </div>
+                            <button type="submit" class="login-button">登录</button>
+                        </form>
+                        <div class="forgot-password"><a onclick="showPasswordHint()">忘记密码？</a></div>
+                    </div>
+                    <div id="setupPasswordSection" style="display: none;">
+                        <div class="login-subtitle">首次使用，请设置登录密码</div>
+                        <form id="setupPasswordForm" onsubmit="handleSetupPassword(event); return false;">
+                            <div class="form-group">
+                                <label class="form-label">设置密码</label>
+                                <input type="password" id="newPassword" class="login-input" placeholder="请输入新密码" autocomplete="new-password" oninput="checkPasswordStrength(this.value)" />
+                                <div class="password-strength" id="passwordStrength">
+                                    <div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div>
+                                    <span class="strength-text" id="strengthText"></span>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">确认密码</label>
+                                <input type="password" id="confirmPassword" class="login-input" placeholder="请再次输入密码" autocomplete="new-password" />
+                            </div>
+                            <div class="password-requirements">
+                                <h4><i class="ri-shield-check-line"></i> 密码要求</h4>
+                                <ul>
+                                    <li id="req-length" class="invalid"><i class="ri-checkbox-blank-circle-line"></i> 至少8个字符</li>
+                                    <li id="req-letter" class="invalid"><i class="ri-checkbox-blank-circle-line"></i> 包含字母</li>
+                                    <li id="req-number" class="invalid"><i class="ri-checkbox-blank-circle-line"></i> 包含数字</li>
+                                    <li id="req-notweak" class="invalid"><i class="ri-checkbox-blank-circle-line"></i> 不能使用简单密码</li>
+                                </ul>
+                            </div>
+                            <button type="submit" class="login-button">设置密码</button>
+                        </form>
+                    </div>
+                    <div id="changePasswordSection" style="display: none;">
+                        <div class="login-subtitle">您正在使用默认密码，请设置新密码</div>
+                        <form id="changePasswordForm" onsubmit="handleChangePassword(event); return false;">
+                            <div class="form-group">
+                                <label class="form-label">新密码</label>
+                                <input type="password" id="changeNewPassword" class="login-input" placeholder="请输入新密码" autocomplete="new-password" oninput="checkChangePasswordStrength(this.value)" />
+                                <div class="password-strength" id="changePasswordStrength">
+                                    <div class="strength-bar"><div class="strength-fill" id="changeStrengthFill"></div></div>
+                                    <span class="strength-text" id="changeStrengthText"></span>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">确认新密码</label>
+                                <input type="password" id="changeConfirmPassword" class="login-input" placeholder="请再次输入新密码" autocomplete="new-password" />
+                            </div>
+                            <div class="password-requirements">
+                                <h4><i class="ri-shield-check-line"></i> 密码要求</h4>
+                                <ul>
+                                    <li id="change-req-length" class="invalid"><i class="ri-checkbox-blank-circle-line"></i> 至少8个字符</li>
+                                    <li id="change-req-letter" class="invalid"><i class="ri-checkbox-blank-circle-line"></i> 包含字母</li>
+                                    <li id="change-req-number" class="invalid"><i class="ri-checkbox-blank-circle-line"></i> 包含数字</li>
+                                    <li id="change-req-notweak" class="invalid"><i class="ri-checkbox-blank-circle-line"></i> 不能使用简单密码</li>
+                                </ul>
+                            </div>
+                            <button type="submit" class="login-button">确认修改</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="password-hint-modal-overlay" id="passwordHintModal" onclick="closePasswordHint(event)">
+        <div class="password-hint-modal" onclick="event.stopPropagation()">
+            <div class="password-hint-modal-header"><i class="ri-key-2-fill"></i><h3>忘记密码</h3></div>
+            <div class="password-hint-modal-body">
+                <div class="password-hint-section danger"><strong><i class="ri-delete-bin-line"></i> 重置密码方法</strong>删除数据库文件 <span class="password-hint-code" style="font-size: 0.85rem;">/config/yjnas.db</span> 后重启容器，即可重新设置密码</div>
+                <div class="password-hint-section warning"><strong><i class="ri-alarm-warning-line"></i> 注意事项</strong>删除数据库将清除所有配置数据，请谨慎操作！<br>建议定期备份数据库文件。</div>
+            </div>
+            <div class="password-hint-modal-footer"><button class="password-hint-modal-btn" onclick="closePasswordHintDirectly()"><i class="ri-close-line"></i> 关闭</button></div>
+        </div>
+    </div>
+    <script>
+        let currentLoginPassword = '';
+        
+        // 获取 URL 中的 redirect 参数，用于登录后跳转回来源页面
+        function getRedirectUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const redirect = urlParams.get('redirect');
+            // 安全检查：只允许相对路径，防止开放重定向攻击
+            if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
+                return redirect;
+            }
+            return '/';
+        }
+        
+        function applyLoginTheme(themeName) {
+            // 检查 THEME_COLORS 是否已加载
+            if (typeof THEME_COLORS === 'undefined') {
+                return;
+            }
+            // 如果指定的主题不存在，使用默认主题
+            if (!THEME_COLORS[themeName]) {
+                themeName = 'tradis-blue';
+            }
+            const theme = THEME_COLORS[themeName];
+            if (!theme || !theme.colors) return;
+            const root = document.documentElement;
+            const colors = theme.colors;
+            root.style.setProperty('--bg', colors.bg);
+            root.style.setProperty('--bg-secondary', colors.bgSecondary);
+            root.style.setProperty('--bg-tertiary', colors.bgTertiary);
+            root.style.setProperty('--bg-elevated', colors.bgElevated);
+            root.style.setProperty('--bg-overlay', colors.bgOverlay);
+            root.style.setProperty('--bg-mask', colors.bgMask);
+            root.style.setProperty('--primary', colors.primary);
+            root.style.setProperty('--primary-hover', colors.primaryHover);
+            root.style.setProperty('--primary-active', colors.primaryActive);
+            root.style.setProperty('--primary-light', colors.primaryLight);
+            root.style.setProperty('--primary-text', colors.primaryText);
+            root.style.setProperty('--success', colors.success);
+            root.style.setProperty('--success-hover', colors.successHover);
+            root.style.setProperty('--success-active', colors.successActive);
+            root.style.setProperty('--success-light', colors.successLight);
+            root.style.setProperty('--success-text', colors.successText);
+            root.style.setProperty('--warning', colors.warning);
+            root.style.setProperty('--warning-hover', colors.warningHover);
+            root.style.setProperty('--warning-active', colors.warningActive);
+            root.style.setProperty('--warning-light', colors.warningLight);
+            root.style.setProperty('--warning-text', colors.warningText);
+            root.style.setProperty('--danger', colors.danger);
+            root.style.setProperty('--danger-hover', colors.dangerHover);
+            root.style.setProperty('--danger-active', colors.dangerActive);
+            root.style.setProperty('--danger-light', colors.dangerLight);
+            root.style.setProperty('--danger-text', colors.dangerText);
+            root.style.setProperty('--info', colors.info);
+            root.style.setProperty('--info-hover', colors.infoHover);
+            root.style.setProperty('--info-active', colors.infoActive);
+            root.style.setProperty('--info-light', colors.infoLight);
+            root.style.setProperty('--info-text', colors.infoText);
+            root.style.setProperty('--text', colors.text);
+            root.style.setProperty('--text-secondary', colors.textSecondary);
+            root.style.setProperty('--text-tertiary', colors.textTertiary);
+            root.style.setProperty('--text-placeholder', colors.textPlaceholder);
+            root.style.setProperty('--text-disabled', colors.textDisabled);
+            root.style.setProperty('--text-inverse', colors.textInverse);
+            root.style.setProperty('--border', colors.border);
+            root.style.setProperty('--border-light', colors.borderLight);
+            root.style.setProperty('--border-dark', colors.borderDark);
+            root.style.setProperty('--border-focus', colors.borderFocus);
+            root.style.setProperty('--link', colors.link);
+            root.style.setProperty('--link-hover', colors.linkHover);
+            root.style.setProperty('--link-active', colors.linkActive);
+            root.style.setProperty('--link-visited', colors.linkVisited);
+            root.style.setProperty('--code-bg', colors.codeBg);
+            root.style.setProperty('--code-border', colors.codeBorder);
+            root.style.setProperty('--code-text', colors.codeText);
+            root.style.setProperty('--input-bg', colors.inputBg);
+            root.style.setProperty('--input-border', colors.inputBorder);
+            root.style.setProperty('--input-focus-border', colors.inputFocusBorder);
+            root.style.setProperty('--input-placeholder', colors.inputPlaceholder);
+            root.style.setProperty('--input-disabled-bg', colors.inputDisabledBg);
+            root.style.setProperty('--input-disabled-text', colors.inputDisabledText);
+            root.style.setProperty('--button-disabled-bg', colors.buttonDisabledBg);
+            root.style.setProperty('--button-disabled-text', colors.buttonDisabledText);
+            root.style.setProperty('--button-disabled-border', colors.buttonDisabledBorder);
+            root.style.setProperty('--selected-bg', colors.selectedBg);
+            root.style.setProperty('--selected-border', colors.selectedBorder);
+            root.style.setProperty('--active-bg', colors.activeBg);
+            root.style.setProperty('--active-border', colors.activeBorder);
+            root.style.setProperty('--divider', colors.divider);
+            root.style.setProperty('--shadow', colors.shadow);
+            root.style.setProperty('--shadow-medium', colors.shadowMedium);
+            root.style.setProperty('--shadow-large', colors.shadowLarge);
+            root.style.setProperty('--shadow-xlarge', colors.shadowXlarge);
+            document.body.style.background = colors.bg;
+        }
+        // 检测是否为移动端
+        function isMobileDevice() {
+            return window.innerWidth <= 768 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+        
+        // 应用移动端简单主题（亮色/暗色）
+        function applyMobileSimpleTheme(theme) {
+            const root = document.documentElement;
+            if (theme === 'light') {
+                // 亮色模式
+                root.style.setProperty('--bg', '#f5f7fa');
+                root.style.setProperty('--bg-secondary', '#ffffff');
+                root.style.setProperty('--bg-tertiary', '#f0f2f5');
+                root.style.setProperty('--bg-elevated', '#ffffff');
+                root.style.setProperty('--bg-overlay', 'rgba(0, 0, 0, 0.35)');
+                root.style.setProperty('--text', '#1a1a2e');
+                root.style.setProperty('--text-secondary', '#5a5a7a');
+                root.style.setProperty('--text-tertiary', '#8a8aa0');
+                root.style.setProperty('--border', '#e0e4e8');
+                root.style.setProperty('--border-light', '#ebeef2');
+                root.style.setProperty('--primary', '#4a90e2');
+                root.style.setProperty('--primary-hover', '#357abd');
+                root.style.setProperty('--primary-light', '#e3f2fd');
+                root.style.setProperty('--primary-text', '#ffffff');
+                root.style.setProperty('--input-bg', '#ffffff');
+                root.style.setProperty('--input-border', '#e0e4e8');
+                root.style.setProperty('--input-placeholder', '#8a8aa0');
+                root.style.setProperty('--shadow', 'rgba(0, 0, 0, 0.08)');
+                document.body.style.background = '#f5f7fa';
+            } else {
+                // 暗色模式（默认）
+                root.style.setProperty('--bg', '#0a0e27');
+                root.style.setProperty('--bg-secondary', '#1a1f3a');
+                root.style.setProperty('--bg-tertiary', '#252b47');
+                root.style.setProperty('--bg-elevated', '#1a1f3a');
+                root.style.setProperty('--bg-overlay', 'rgba(0, 0, 0, 0.5)');
+                root.style.setProperty('--text', '#ffffff');
+                root.style.setProperty('--text-secondary', '#b0b8d4');
+                root.style.setProperty('--text-tertiary', '#7c85a0');
+                root.style.setProperty('--border', '#3b4257');
+                root.style.setProperty('--border-light', '#4a5068');
+                root.style.setProperty('--primary', '#4a90e2');
+                root.style.setProperty('--primary-hover', '#357abd');
+                root.style.setProperty('--primary-light', '#1a3a5c');
+                root.style.setProperty('--primary-text', '#ffffff');
+                root.style.setProperty('--input-bg', '#252b47');
+                root.style.setProperty('--input-border', '#3b4257');
+                root.style.setProperty('--input-placeholder', '#7c85a0');
+                root.style.setProperty('--shadow', 'rgba(0, 0, 0, 0.3)');
+                document.body.style.background = '#0a0e27';
+            }
+            // 保存到localStorage
+            localStorage.setItem('mobile-theme', theme);
+        }
+        
+        async function loadThemeSettings() {
+            try {
+                const response = await fetch('/api/public/theme');
+                const result = await response.json();
+                
+                // 检测是否为移动端
+                if (isMobileDevice()) {
+                    // 移动端：优先使用移动端主题设置
+                    const mobileTheme = result.mobile_theme || localStorage.getItem('mobile-theme') || 'dark';
+                    applyMobileSimpleTheme(mobileTheme);
+                } else {
+                    // PC端：使用PC端主题设置
+                    if (result.success && result.theme) {
+                        applyLoginTheme(result.theme);
+                    } else {
+                        applyLoginTheme('tradis-blue');
+                    }
+                }
+            } catch (error) {
+                console.error('加载主题失败:', error);
+                // 移动端使用localStorage缓存
+                if (isMobileDevice()) {
+                    const cachedTheme = localStorage.getItem('mobile-theme') || 'dark';
+                    applyMobileSimpleTheme(cachedTheme);
+                } else {
+                    applyLoginTheme('tradis-blue');
+                }
+            }
+        }
+        async function checkPasswordStatus() {
+            try {
+                const response = await fetch('/api/public/password-status');
+                const result = await response.json();
+                if (result.success && result.need_setup) {
+                    showSetupPasswordForm();
+                    // 首次创建账户时隐藏2FA输入框
+                    const totpGroup = document.getElementById('totpCodeGroup');
+                    if (totpGroup) totpGroup.style.display = 'none';
+                }
+            } catch (error) { console.error('检查密码状态失败:', error); }
+        }
+        function showSetupPasswordForm() {
+            document.getElementById('loginFormSection').style.display = 'none';
+            document.getElementById('setupPasswordSection').style.display = 'block';
+            document.getElementById('changePasswordSection').style.display = 'none';
+            document.getElementById('newPassword').focus();
+        }
+        function showChangePasswordForm() {
+            document.getElementById('loginFormSection').style.display = 'none';
+            document.getElementById('setupPasswordSection').style.display = 'none';
+            document.getElementById('changePasswordSection').style.display = 'block';
+            document.getElementById('changeNewPassword').focus();
+        }
+        function showLoginForm() {
+            document.getElementById('loginFormSection').style.display = 'block';
+            document.getElementById('setupPasswordSection').style.display = 'none';
+            document.getElementById('changePasswordSection').style.display = 'none';
+            document.getElementById('loginPassword').focus();
+        }
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('loginNotificationContainer');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            container.appendChild(notification);
+            setTimeout(() => {
+                notification.style.animation = 'slideOutRight 0.3s ease-out';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+        function showPasswordHint() { document.getElementById('passwordHintModal').classList.add('show'); }
+        function closePasswordHint(event) { if (event.target.id === 'passwordHintModal') document.getElementById('passwordHintModal').classList.remove('show'); }
+        function closePasswordHintDirectly() { document.getElementById('passwordHintModal').classList.remove('show'); }
+        function checkPasswordStrength(password) {
+            const strengthDiv = document.getElementById('passwordStrength');
+            const strengthFill = document.getElementById('strengthFill');
+            const strengthText = document.getElementById('strengthText');
+            updateRequirements(password, 'req-length', 'req-letter', 'req-number', 'req-notweak');
+            if (!password) { strengthDiv.classList.remove('show'); return; }
+            strengthDiv.classList.add('show');
+            const strength = calculateStrength(password);
+            strengthFill.className = 'strength-fill ' + strength.level;
+            strengthText.className = 'strength-text ' + strength.level;
+            strengthText.textContent = strength.text;
+        }
+        function checkChangePasswordStrength(password) {
+            const strengthDiv = document.getElementById('changePasswordStrength');
+            const strengthFill = document.getElementById('changeStrengthFill');
+            const strengthText = document.getElementById('changeStrengthText');
+            updateRequirements(password, 'change-req-length', 'change-req-letter', 'change-req-number', 'change-req-notweak');
+            if (!password) { strengthDiv.classList.remove('show'); return; }
+            strengthDiv.classList.add('show');
+            const strength = calculateStrength(password);
+            strengthFill.className = 'strength-fill ' + strength.level;
+            strengthText.className = 'strength-text ' + strength.level;
+            strengthText.textContent = strength.text;
+        }
+        function updateRequirements(password, lengthId, letterId, numberId, notweakId) {
+            updateRequirement(lengthId, password.length >= 8);
+            updateRequirement(letterId, /[a-zA-Z]/.test(password));
+            updateRequirement(numberId, /[0-9]/.test(password));
+            if (notweakId) updateRequirement(notweakId, password.length > 0 && !isWeakPassword(password));
+        }
+        function updateRequirement(id, valid) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.className = valid ? 'valid' : 'invalid';
+                el.querySelector('i').className = valid ? 'ri-checkbox-circle-fill' : 'ri-checkbox-blank-circle-line';
+            }
+        }
+        // 简单密码黑名单
+        const weakPasswordPatterns = [
+            '123456', '12345678', '123456789', '1234567890',
+            'password', 'qwerty', 'qwertyuiop', 'asdfgh', 'asdfghjkl',
+            'zxcvbn', 'zxcvbnm', 'abc123', '111111', '000000',
+            '123123', '654321', '666666', '888888', 'admin',
+            'letmein', 'welcome', 'monkey', 'dragon', 'master',
+            'login', 'passw0rd', 'p@ssword', 'p@ssw0rd',
+            'iloveyou', 'sunshine', 'princess', 'football', 'baseball',
+            'qwer1234', '1q2w3e4r', '1qaz2wsx', 'q1w2e3r4'
+        ];
+        function isWeakPassword(password) {
+            const lowerPassword = password.toLowerCase();
+            for (const weak of weakPasswordPatterns) {
+                if (lowerPassword === weak || lowerPassword.includes(weak)) return true;
+            }
+            if (isSequentialChars(password)) return true;
+            if (isRepeatedChars(password)) return true;
+            return false;
+        }
+        function isSequentialChars(password) {
+            if (password.length < 4) return false;
+            let ascending = 0, descending = 0;
+            for (let i = 1; i < password.length; i++) {
+                const diff = password.charCodeAt(i) - password.charCodeAt(i - 1);
+                if (diff === 1) ascending++;
+                else if (diff === -1) descending++;
+            }
+            const threshold = Math.floor(password.length * 0.6);
+            return ascending >= threshold || descending >= threshold;
+        }
+        function isRepeatedChars(password) {
+            if (password.length < 4) return false;
+            const charCount = {};
+            for (const char of password) charCount[char] = (charCount[char] || 0) + 1;
+            const threshold = Math.floor(password.length / 2);
+            for (const count of Object.values(charCount)) {
+                if (count > threshold) return true;
+            }
+            return false;
+        }
+        function calculateStrength(password) {
+            if (isWeakPassword(password)) return { level: 'weak', text: '弱 - 密码过于简单' };
+            let score = 0;
+            if (password.length >= 8) score++;
+            if (password.length >= 12) score++;
+            if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+            if (/[0-9]/.test(password)) score++;
+            if (/[^a-zA-Z0-9]/.test(password)) score++;
+            if (score <= 2) return { level: 'weak', text: '弱' };
+            if (score <= 3) return { level: 'medium', text: '中等' };
+            return { level: 'strong', text: '强' };
+        }
+        function validatePassword(password) {
+            if (password.length < 8) return false;
+            if (!/[a-zA-Z]/.test(password)) return false;
+            if (!/[0-9]/.test(password)) return false;
+            if (isWeakPassword(password)) return false;
+            return true;
+        }
+        function getPasswordError(password) {
+            if (password.length < 8) return '密码长度不足8位';
+            if (!/[a-zA-Z]/.test(password)) return '密码必须包含字母';
+            if (!/[0-9]/.test(password)) return '密码必须包含数字';
+            if (isWeakPassword(password)) return '密码过于简单，请避免使用常见密码或连续/重复字符';
+            return '';
+        }
+        let localFailCount = 0;
+        function formatLockTime(seconds) {
+            if (seconds >= 3600) {
+                const hours = Math.floor(seconds / 3600);
+                const mins = Math.floor((seconds % 3600) / 60);
+                return mins > 0 ? `${hours}小时${mins}分钟` : `${hours}小时`;
+            } else if (seconds >= 60) return `${Math.ceil(seconds / 60)}分钟`;
+            return `${seconds}秒`;
+        }
+        
+        async function handleLogin(event) {
+            event.preventDefault();
+            const password = document.getElementById('loginPassword').value;
+            const totpCodeEl = document.getElementById('loginTotpCode');
+            const totpCode = totpCodeEl ? totpCodeEl.value.trim() : '';
+            
+            if (!password) { showNotification('请输入密码', 'error'); return; }
+            
+            // 验证2FA验证码格式（如果填写了的话）
+            if (totpCode && !/^\d{6}$/.test(totpCode)) {
+                showNotification('请输入6位数字验证码', 'error');
+                return;
+            }
+            
+            try {
+                const requestBody = { password };
+                if (totpCode) {
+                    requestBody.totp_code = totpCode;
+                }
+                
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestBody)
+                });
+                const result = await response.json();
+                if (result.success) {
+                    localFailCount = 0;
+                    localStorage.setItem('auth_token', result.token);
+                    localStorage.setItem('token', result.token);
+                    // 获取 redirect 参数，登录后跳转到来源页面
+                    const redirectUrl = getRedirectUrl();
+                    if (result.using_default_password) {
+                        showNotification('⚠️ 您正在使用初始密码，请尽快修改密码以确保安全！', 'error');
+                        setTimeout(() => { window.location.href = redirectUrl; }, 2000);
+                    } else {
+                        showNotification('登录成功，正在跳转...', 'success');
+                        setTimeout(() => { window.location.href = redirectUrl; }, 500);
+                    }
+                } else if (result.require_totp) {
+                    // 需要2FA验证但未提供验证码
+                    showNotification(result.message || '请输入两步验证码', 'error');
+                    if (totpCodeEl) {
+                        totpCodeEl.focus();
+                    }
+                } else if (result.require_change) {
+                    currentLoginPassword = password;
+                    showNotification(result.message || '请设置新密码', 'error');
+                    showChangePasswordForm();
+                } else if (result.locked) {
+                    const lockTime = formatLockTime(result.retry_after_secs || result.retry_after_mins * 60);
+                    showNotification(`🔒 登录已被锁定，请 ${lockTime} 后再试`, 'error');
+                    document.getElementById('loginPassword').value = '';
+                    document.getElementById('loginPassword').disabled = true;
+                    document.querySelector('#loginForm .login-button').disabled = true;
+                    const unlockTime = (result.retry_after_secs || result.retry_after_mins * 60) * 1000;
+                    setTimeout(() => {
+                        document.getElementById('loginPassword').disabled = false;
+                        document.querySelector('#loginForm .login-button').disabled = false;
+                        showNotification('🔓 锁定已解除，可以重新尝试登录', 'success');
+                    }, unlockTime);
+                } else {
+                    localFailCount++;
+                    const remaining = 5 - localFailCount;
+                    // 如果是2FA验证码错误，清空验证码输入框
+                    if (result.totp_error && totpCodeEl) {
+                        totpCodeEl.value = '';
+                        totpCodeEl.focus();
+                    } else {
+                        document.getElementById('loginPassword').value = '';
+                        document.getElementById('loginPassword').focus();
+                    }
+                    if (remaining > 0 && remaining <= 3) showNotification(`⚠️ ${result.message || '验证失败'}！还剩 ${remaining} 次尝试机会`, 'error');
+                    else if (remaining <= 0) showNotification('🔒 尝试次数过多，账户即将被锁定', 'error');
+                    else showNotification(result.message || '密码错误', 'error');
+                }
+            } catch (error) {
+                console.error('登录错误:', error);
+                showNotification('登录请求失败，请检查网络连接', 'error');
+            }
+        }
+        async function handleSetupPassword(event) {
+            event.preventDefault();
+            const password = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            if (!password || !confirmPassword) { showNotification('请填写所有字段', 'error'); return; }
+            if (password !== confirmPassword) { showNotification('两次输入的密码不一致', 'error'); return; }
+            const passwordError = getPasswordError(password);
+            if (passwordError) { showNotification(passwordError, 'error'); return; }
+            try {
+                const response = await fetch('/api/public/setup-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: password, confirm_password: confirmPassword })
+                });
+                const result = await response.json();
+                if (result.success) { showNotification('密码设置成功，请登录', 'success'); showLoginForm(); }
+                else showNotification(result.message || '设置密码失败', 'error');
+            } catch (error) {
+                console.error('设置密码错误:', error);
+                showNotification('设置密码请求失败，请检查网络连接', 'error');
+            }
+        }
+        async function handleChangePassword(event) {
+            event.preventDefault();
+            const newPassword = document.getElementById('changeNewPassword').value;
+            const confirmPassword = document.getElementById('changeConfirmPassword').value;
+            if (!newPassword || !confirmPassword) { showNotification('请填写所有字段', 'error'); return; }
+            if (newPassword !== confirmPassword) { showNotification('两次输入的密码不一致', 'error'); return; }
+            const passwordError = getPasswordError(newPassword);
+            if (passwordError) { showNotification(passwordError, 'error'); return; }
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: currentLoginPassword, new_password: newPassword })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    localStorage.setItem('auth_token', result.token);
+                    localStorage.setItem('token', result.token);
+                    showNotification('密码修改成功，正在跳转...', 'success');
+                    // 获取 redirect 参数，登录后跳转到来源页面
+                    const redirectUrl = getRedirectUrl();
+                    setTimeout(() => { window.location.href = redirectUrl; }, 1000);
+                } else showNotification(result.message || '修改密码失败', 'error');
+            } catch (error) {
+                console.error('修改密码错误:', error);
+                showNotification('修改密码请求失败，请检查网络连接', 'error');
+            }
+        }
+        function initParticles() {
+            if (typeof particlesJS !== 'undefined') {
+                const getParticleColor = () => {
+                    const computedStyle = getComputedStyle(document.documentElement);
+                    return computedStyle.getPropertyValue('--primary').trim() || '#7BA3C7';
+                };
+                particlesJS("login-particles-js", {
+                    "particles": {
+                        "number": { "value": 30, "density": { "enable": true, "value_area": 1200 } },
+                        "color": { "value": getParticleColor() },
+                        "shape": { "type": "polygon", "stroke": { "width": 0, "color": "#000000" }, "polygon": { "nb_sides": 6 } },
+                        "opacity": { "value": 0.3, "random": true, "anim": { "enable": true, "speed": 1.5, "opacity_min": 0.1, "sync": false } },
+                        "size": { "value": 3, "random": true, "anim": { "enable": false, "speed": 20, "size_min": 0.1, "sync": false } },
+                        "line_linked": { "enable": true, "distance": 200, "color": getParticleColor(), "opacity": 0.15, "width": 1 },
+                        "move": { "enable": true, "speed": 0.8, "direction": "none", "random": false, "straight": false, "out_mode": "out", "bounce": false, "attract": { "enable": false, "rotateX": 600, "rotateY": 1200 } }
+                    },
+                    "interactivity": {
+                        "detect_on": "canvas",
+                        "events": { "onhover": { "enable": true, "mode": "grab" }, "onclick": { "enable": true, "mode": "push" }, "resize": true },
+                        "modes": { "grab": { "distance": 180, "line_linked": { "opacity": 0.4 } }, "push": { "particles_nb": 3 } }
+                    },
+                    "retina_detect": true
+                });
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadThemeSettings();
+            checkPasswordStatus();
+            initParticles();
+            
+            // 初始聚焦（仅一次）
+            setTimeout(() => {
+                document.getElementById('loginPassword').focus();
+            }, 100);
+        });
+    </script>
+    <script src="/static/lib/particles.min.js?v=latest-2603271513"></script>
+</body>
+</html>

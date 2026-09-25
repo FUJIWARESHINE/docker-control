@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Docker Control</title>
+    <link rel="icon" href="/static/ico.png?v=2" type="image/png">
+    <!-- 版本控制脚本（必须最先加载） -->
+    <script src="/static/js/version.min.js?v=latest-2603271513"></script>
+    <!-- 字体文件必须在主CSS之前加载 -->
+    <link rel="stylesheet" href="/static/fonts/cybernav-fonts.css">
+    <link rel="stylesheet" href="/static/fonts/remixicon.css">
+    <link rel="stylesheet" href="/static/css/mobile.min.css?v=latest-2603271513">
+    <script src="/static/js/THEME_COLORS.min.js?v=latest-2603271513"></script>
+</head>
+<body>
+    <!-- 顶部导航栏 -->
+    <nav class="mobile-nav">
+        <div class="nav-header">
+            <div class="nav-brand">
+                <img src="/static/logo.png" alt="Logo" class="nav-logo" onerror="this.style.display='none'">
+                <span class="nav-title">DIANCUP</span>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <!-- 后端指示器 -->
+                <div class="mobile-backend-indicator" id="mobileBackendIndicator" onclick="showMobileBackendSwitchMenu()">
+                    <i class="ri-server-line"></i>
+                    <span id="mobileServerName">本地服务器</span>
+                </div>
+                <button class="nav-menu-btn" onclick="toggleMobileMenu()">
+                    <i class="ri-menu-line"></i>
+                </button>
+                <a class="nav-menu-btn" href="/" title="导航页" style="text-decoration:none;color:inherit;">
+                    <i class="ri-compass-3-line"></i>
+                </a>
+                <button class="nav-menu-btn" onclick="toggleMobileLogPanel()">
+                    <i class="ri-file-list-3-line"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 侧边栏菜单 -->
+    <div class="mobile-sidebar" id="mobileSidebar">
+        <div class="sidebar-overlay" onclick="toggleMobileMenu()"></div>
+        <div class="sidebar-content">
+            <div class="sidebar-header">
+                <div class="sidebar-brand">
+                    <img src="/static/logo.png" alt="Logo" class="sidebar-logo" onerror="this.style.display='none'">
+                    <span>DIANCUP</span>
+                </div>
+                <button class="sidebar-close" onclick="toggleMobileMenu()">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="/" class="menu-item active" onclick="navigateTo('dashboard')">
+                    <i class="ri-dashboard-fill"></i> 仪表板
+                </a></li>
+                <li><a href="#" class="menu-item" onclick="navigateTo('containers')">
+                    <i class="ri-server-fill"></i> 容器
+                </a></li>
+                <li><a href="#" class="menu-item" onclick="navigateTo('projects')">
+                    <i class="ri-folder-fill"></i> 项目
+                </a></li>
+                <li><a href="#" class="menu-item" onclick="navigateTo('files')">
+                    <i class="ri-folder-3-fill"></i> 文件
+                </a></li>
+                <li><a href="#" class="menu-item" onclick="navigateTo('images')">
+                    <i class="ri-image-fill"></i> 镜像
+                </a></li>
+                <li><a href="#" class="menu-item" onclick="navigateTo('networks')">
+                    <i class="ri-router-fill"></i> 网络
+                </a></li>
+                <li><a href="#" class="menu-item" onclick="navigateTo('volumes')">
+                    <i class="ri-save-3-fill"></i> 存储
+                </a></li>
+                <li><a href="#" class="menu-item" onclick="navigateTo('probe')" id="mobileProbeNavItem" style="position: relative;">
+                    <i class="ri-radar-fill"></i> 探针
+                    <span id="mobileProbeUpdateDot" class="mobile-nav-update-dot" style="display: none;"></span>
+                </a></li>
+                <li><a href="#" class="menu-item" onclick="navigateTo('settings')">
+                    <i class="ri-settings-4-fill"></i> 设置
+                </a></li>
+                <li><a href="#" class="menu-item" onclick="navigateTo('about')">
+                    <i class="ri-information-fill"></i> 关于
+                </a></li>
+                <li class="menu-divider"></li>
+                <li>
+                    <div class="menu-item theme-switch-item" onclick="toggleMobileTheme()">
+                        <i class="ri-sun-fill" id="themeIcon"></i>
+                        <span id="themeText">亮色模式</span>
+                        <div class="theme-switch-toggle" id="themeToggle">
+                            <div class="theme-switch-slider"></div>
+                        </div>
+                    </div>
+                </li>
+                <li id="menuDesktopItem"><a href="/dashboard?desktop=true" class="menu-item">
+                    <i class="ri-computer-fill"></i> 电脑页
+                </a></li>
+                <li id="menuLogoutItem"><a href="#" class="menu-item danger" onclick="logout()">
+                    <i class="ri-logout-box-r-fill"></i> 退出登录
+                </a></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 主内容区 -->
+    <main class="mobile-main">
+        <!-- 仪表板视图 -->
+        <div class="view-section active" id="view-dashboard">
+            <!-- 主机信息 -->
+            <section class="card-section">
+                <div class="section-title">
+                    <i class="ri-server-line"></i> 主机信息
+                </div>
+                <div class="host-stats-grid">
+                    <div class="host-stat-item">
+                        <canvas id="cpuChart" width="70" height="70"></canvas>
+                        <div class="host-stat-label">CPU</div>
+                    </div>
+                    <div class="host-stat-item">
+                        <canvas id="memChart" width="70" height="70"></canvas>
+                        <div class="host-stat-label">内存</div>
+                    </div>
+                    <div class="host-stat-item">
+                        <canvas id="diskChart" width="70" height="70"></canvas>
+                        <div class="host-stat-label">磁盘</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 容器统计 -->
+            <section class="card-section">
+                <div class="section-title">
+                    <i class="ri-dashboard-3-fill"></i> 容器统计
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon primary">
+                            <i class="ri-stack-fill"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-total">0</div>
+                            <div class="stat-label">总数</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon success">
+                            <i class="ri-play-circle-fill"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-running">0</div>
+                            <div class="stat-label">运行中</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon danger">
+                            <i class="ri-stop-circle-fill"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-stopped">0</div>
+                            <div class="stat-label">已停止</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon warning">
+                            <i class="ri-upload-cloud-fill"></i>
+                        </div>
+                        <div class="stat-info">
+                            <div class="stat-value" id="stat-updatable">0</div>
+                            <div class="stat-label">可更新</div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 自动更新卡片 -->
+                <div class="auto-update-card" id="autoUpdateCard">
+                    <div class="auto-update-progress"></div>
+                    <div class="auto-update-section">
+                        <div class="star-with-number">
+                            <i class="ri-star-fill"></i>
+                            <span class="star-number" id="stat-auto">0</span>
+                        </div>
+                        <div class="auto-update-label">已加入</div>
+                    </div>
+                    <div class="auto-update-divider"></div>
+                    <div class="auto-update-section auto-update-center">
+                        <div class="auto-update-last" id="lastUpdateInfo">
+                            <div class="last-update-container">暂无更新</div>
+                            <div class="last-update-time">--</div>
+                        </div>
+                    </div>
+                    <div class="auto-update-divider"></div>
+                    <div class="auto-update-section">
+                        <button class="auto-update-check-btn" onclick="checkAllUpdates()" title="手动检查更新">
+                            <i class="ri-refresh-line"></i>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 可更新容器列表 -->
+            <section class="card-section" id="updatable-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i class="ri-upload-cloud-line"></i> 可更新容器
+                    </div>
+                    <button class="btn-icon" onclick="loadMobileDashboard()">
+                        <i class="ri-refresh-line"></i>
+                    </button>
+                </div>
+                <div id="mobile-updatable-list" class="container-list"></div>
+            </section>
+
+            <!-- 自动更新容器列表 -->
+            <section class="card-section" id="autoupdate-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i class="ri-star-fill"></i> 自动更新容器
+                    </div>
+                </div>
+                <div id="mobile-autoupdate-list" class="container-list"></div>
+            </section>
+        </div>
+
+        <!-- 容器管理视图 -->
+        <div class="view-section" id="view-containers">
+            <section class="card-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i class="ri-container-ship-fill"></i> 容器管理
+                    </div>
+                    <button class="btn-icon" onclick="loadMobileContainers()">
+                        <i class="ri-refresh-line"></i>
+                    </button>
+                </div>
+                <div class="filter-bar">
+                    <select class="filter-select" id="mobileFilterStatus" onchange="filterMobileContainers()">
+                        <option value="all">全部状态</option>
+                        <option value="running">运行中</option>
+                        <option value="exited">已停止</option>
+                        <option value="updatable">可更新</option>
+                    </select>
+                </div>
+                <div id="mobile-containers-manage-list" class="container-list">
+                    <div class="loading-state">加载中...</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 项目管理视图 -->
+        <div class="view-section" id="view-projects">
+            <section class="card-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i class="ri-folder-fill"></i> Compose 项目
+                    </div>
+                    <button class="btn-icon" onclick="loadMobileProjects()">
+                        <i class="ri-refresh-line"></i>
+                    </button>
+                </div>
+                <div id="mobile-projects-list" class="project-list">
+                    <div class="loading-state">加载中...</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 镜像管理视图 -->
+        <div class="view-section" id="view-images">
+            <section class="card-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i class="ri-image-fill"></i> 镜像管理
+                    </div>
+                    <button class="btn-icon" onclick="loadMobileImages()">
+                        <i class="ri-refresh-line"></i>
+                    </button>
+                </div>
+                <div id="mobile-images-list" class="container-list">
+                    <div class="loading-state">加载中...</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 网络管理视图 -->
+        <div class="view-section" id="view-networks">
+            <section class="card-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i class="ri-router-fill"></i> 网络管理
+                    </div>
+                    <button class="btn-icon" onclick="loadMobileNetworks()">
+                        <i class="ri-refresh-line"></i>
+                    </button>
+                </div>
+                <div id="mobile-networks-list" class="container-list">
+                    <div class="loading-state">加载中...</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 存储管理视图 -->
+        <div class="view-section" id="view-volumes">
+            <section class="card-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i class="ri-save-3-fill"></i> 存储管理
+                    </div>
+                    <button class="btn-icon" onclick="loadMobileVolumes()">
+                        <i class="ri-refresh-line"></i>
+                    </button>
+                </div>
+                <div id="mobile-volumes-list" class="container-list">
+                    <div class="loading-state">加载中...</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 文件管理视图 -->
+        <div class="view-section" id="view-files">
+            <section class="card-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i class="ri-folder-3-fill"></i> 文件管理
+                    </div>
+                    <div style="display: flex; gap: 0.25rem;">
+                        <button class="btn-icon" onclick="showMobileFileManagerSettings()" title="设置">
+                            <i class="ri-settings-3-line"></i>
+                        </button>
+                        <button class="btn-icon" onclick="refreshMobileFiles()">
+                            <i class="ri-refresh-line"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 路径导航 -->
+                <div class="file-path-nav">
+                    <button class="btn-icon" onclick="navigateMobileUp()" title="返回上级">
+                        <i class="ri-arrow-up-line"></i>
+                    </button>
+                    <button class="btn-icon" onclick="navigateMobileToRoot()" title="返回根目录">
+                        <i class="ri-home-4-line"></i>
+                    </button>
+                    <div class="current-path" id="mobileCurrentPath">/</div>
+                    <button class="btn-icon" onclick="showMobileNewItemModal()" title="新建" id="mobileNewItemBtn">
+                        <i class="ri-add-line"></i>
+                    </button>
+                    <button class="btn-icon" onclick="triggerMobileFileUpload()" title="上传文件" id="mobileUploadBtn">
+                        <i class="ri-upload-2-fill"></i>
+                    </button>
+                    <input type="file" id="mobileFileUploadInput" multiple style="display: none;" onchange="handleMobileFileUpload(event)">
+                </div>
+                
+                <!-- 文件列表 -->
+                <div id="mobile-files-list" class="file-list">
+                    <div class="loading-state">加载中...</div>
+                </div>
+            </section>
+            
+            <!-- 文件操作底部栏 -->
+            <div class="file-action-bar" id="fileActionBar" style="display: none;">
+                <div class="file-action-info">
+                    <span id="selectedFileCount">0</span> 个文件已选中
+                </div>
+                <div class="file-action-buttons" style="display: flex; flex-wrap: wrap; gap: 0.25rem;">
+                    <button class="btn btn-small btn-secondary" onclick="copyMobileSelectedFiles()" title="复制">
+                        <i class="ri-file-copy-2-line"></i>
+                    </button>
+                    <button class="btn btn-small btn-secondary" onclick="cutMobileSelectedFiles()" title="剪切">
+                        <i class="ri-scissors-cut-line"></i>
+                    </button>
+                    <button class="btn btn-small btn-secondary" onclick="compressMobileSelectedFiles()" title="压缩">
+                        <i class="ri-file-zip-line"></i>
+                    </button>
+                    <button class="btn btn-small btn-danger" onclick="deleteMobileSelectedFiles()" title="删除">
+                        <i class="ri-delete-bin-line"></i>
+                    </button>
+                    <button class="btn btn-small btn-secondary" onclick="cancelMobileFileSelection()" title="取消">
+                        <i class="ri-close-line"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 粘贴操作栏（剪贴板有内容时显示） -->
+            <div class="file-paste-bar" id="filePasteBar" style="display: none;">
+                <div class="file-action-info">
+                    <i class="ri-clipboard-line"></i> 剪贴板: <span id="clipboardFileCount">0</span> 个文件
+                </div>
+                <div class="file-action-buttons">
+                    <button class="btn btn-small btn-primary" onclick="pasteMobileFiles()">
+                        <i class="ri-clipboard-line"></i> 粘贴到此处
+                    </button>
+                    <button class="btn btn-small btn-secondary" onclick="clearMobileClipboard()">
+                        <i class="ri-close-line"></i> 清空
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 探针视图 -->
+        <div class="view-section" id="view-probe">
+            <section class="card-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i class="ri-radar-fill"></i> 昱君探针
+                    </div>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn btn-small btn-secondary" onclick="mobileProbeRefreshStatus()" title="刷新状态">
+                            <i class="ri-refresh-line" id="mobileProbeRefreshIcon"></i>
+                        </button>
+                        <button class="btn btn-small btn-primary" onclick="showMobileAddProbeServer()">
+                            <i class="ri-add-line"></i> 添加
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 统计卡片 -->
+                <div class="probe-stats-grid" id="mobileProbeStats">
+                    <div class="probe-stat-card" onclick="filterMobileProbeServers('all')">
+                        <div class="probe-stat-value" id="mobileProbeTotal">0</div>
+                        <div class="probe-stat-label">全部</div>
+                    </div>
+                    <div class="probe-stat-card online" onclick="filterMobileProbeServers('online')">
+                        <div class="probe-stat-value" id="mobileProbeOnline">0</div>
+                        <div class="probe-stat-label">在线</div>
+                    </div>
+                    <div class="probe-stat-card offline" onclick="filterMobileProbeServers('offline')">
+                        <div class="probe-stat-value" id="mobileProbeOffline">0</div>
+                        <div class="probe-stat-label">离线</div>
+                    </div>
+                </div>
+
+                <!-- 服务器列表 -->
+                <div class="probe-server-list" id="mobileProbeServerList">
+                    <div class="loading-state">加载中...</div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 设置视图 -->
+        <div class="view-section" id="view-settings">
+            <section class="card-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <i class="ri-settings-4-fill"></i> 系统设置
+                    </div>
+                </div>
+
+                <!-- 快速设置卡片 -->
+                <div class="settings-cards">
+                    <div class="setting-card" onclick="openSettingPage('autoupdate')">
+                        <div class="setting-icon primary">
+                            <i class="ri-time-fill"></i>
+                        </div>
+                        <div class="setting-info">
+                            <div class="setting-title">检查更新</div>
+                            <div class="setting-desc">自动更新配置</div>
+                        </div>
+                        <i class="ri-arrow-right-s-line"></i>
+                    </div>
+
+                    <div class="setting-card" onclick="openSettingPage('notification')">
+                        <div class="setting-icon success">
+                            <i class="ri-notification-3-fill"></i>
+                        </div>
+                        <div class="setting-info">
+                            <div class="setting-title">通知设置</div>
+                            <div class="setting-desc">消息推送设置</div>
+                        </div>
+                        <i class="ri-arrow-right-s-line"></i>
+                    </div>
+
+                    <div class="setting-card" onclick="openSettingPage('api')">
+                        <div class="setting-icon danger">
+                            <i class="ri-key-fill"></i>
+                        </div>
+                        <div class="setting-info">
+                            <div class="setting-title">API 管理</div>
+                            <div class="setting-desc">API密钥管理</div>
+                        </div>
+                        <i class="ri-arrow-right-s-line"></i>
+                    </div>
+
+                    <div class="setting-card" onclick="openSettingPage('proxy')">
+                        <div class="setting-icon info">
+                            <i class="ri-link"></i>
+                        </div>
+                        <div class="setting-info">
+                            <div class="setting-title">代理设置</div>
+                            <div class="setting-desc">网络代理配置</div>
+                        </div>
+                        <i class="ri-arrow-right-s-line"></i>
+                    </div>
+
+                    <div class="setting-card" onclick="openSettingPage('system')">
+                        <div class="setting-icon secondary">
+                            <i class="ri-settings-4-fill"></i>
+                        </div>
+                        <div class="setting-info">
+                            <div class="setting-title">系统设置</div>
+                            <div class="setting-desc">密码与配置管理</div>
+                        </div>
+                        <i class="ri-arrow-right-s-line"></i>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 子设置页面视图 -->
+        <div class="view-section" id="view-setting-detail">
+            <section class="card-section">
+                <div class="section-header">
+                    <button class="btn-icon" onclick="navigateTo('settings')">
+                        <i class="ri-arrow-left-line"></i>
+                    </button>
+                    <div class="section-title" id="setting-detail-title">设置详情</div>
+                    <div style="width: 40px;"></div>
+                </div>
+
+                <div id="setting-detail-content" class="setting-detail-content">
+                    <!-- 动态加载设置内容 -->
+                </div>
+            </section>
+        </div>
+
+        <!-- 关于视图 -->
+        <div class="view-section" id="view-about">
+            <section class="card-section">
+                <div class="about-card">
+                    <div class="app-logo">
+                        <i class="ri-server-fill" style="font-size: 4rem; color: var(--primary);"></i>
+                    </div>
+                    <h1 class="app-title">DIANCUP</h1>
+                    <p class="app-desc">Docker容器管理、宿主机监控工具</p>
+
+                    <div class="info-section">
+                        <h3><i class="ri-book-read-fill"></i> 项目介绍</h3>
+                        <p style="line-height: 1.8; text-align: left;">
+                            <strong style="color: var(--primary);">DIANCUP</strong> 是一款 Docker 容器管理、宿主机监控工具，提供多服务器切换管理，Web 界面和 Telegram Bot 交互方式。
+                        </p>
+                        <p style="line-height: 1.8; text-align: left; margin-top: 0.5rem;">
+                            <i class="ri-checkbox-circle-fill" style="color: var(--success);"></i> <strong>核心功能:</strong> 智能镜像版本检测、自动更新策略配置、容器全方位管理
+                        </p>
+                        <p style="line-height: 1.8; text-align: left;">
+                            <i class="ri-checkbox-circle-fill" style="color: var(--success);"></i> <strong>Web终端:</strong> 集成SSH终端，支持多标签页管理
+                        </p>
+                        <p style="line-height: 1.8; text-align: left;">
+                            <i class="ri-checkbox-circle-fill" style="color: var(--success);"></i> <strong>监控信息:</strong> 实时显示CPU、内存、磁盘等关键指标
+                        </p>
+                        <p style="line-height: 1.8; text-align: left;">
+                            <i class="ri-checkbox-circle-fill" style="color: var(--success);"></i> <strong>交互系统:</strong> 企业微信推送与操作功能
+                        </p>
+                    </div>
+
+                    <div class="info-section">
+                        <h3><i class="ri-user-star-fill"></i> 制作者</h3>
+                        <p style="font-size: 1.5rem; font-weight: bold; color: var(--primary);">YJNAS DIAN</p>
+                    </div>
+
+                    <div class="info-section">
+                        <h3><i class="ri-contacts-book-fill"></i> 联系方式</h3>
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem; text-align: left;">
+                            <div style="display: flex; align-items: center; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 6px; border-left: 3px solid #07C160;">
+                                <i class="ri-wechat-fill" style="font-size: 1.5rem; color: #07C160; margin-right: 0.75rem;"></i>
+                                <div>
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary);">微信号</div>
+                                    <div style="font-weight: 600;">dongqc123</div>
+                                </div>
+                            </div>
+                            <a href="https://wiki.929722.xyz" target="_blank" style="display: flex; align-items: center; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 6px; border-left: 3px solid var(--primary); text-decoration: none;">
+                                <i class="ri-edit-2-fill" style="font-size: 1.5rem; color: var(--primary); margin-right: 0.75rem;"></i>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary);">博客地址</div>
+                                    <div style="font-weight: 600; color: var(--text);">wiki.929722.xyz</div>
+                                </div>
+                                <i class="ri-external-link-line" style="color: var(--text-tertiary);"></i>
+                            </a>
+                            <a href="https://space.bilibili.com/668023659" target="_blank" style="display: flex; align-items: center; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 6px; border-left: 3px solid #FB7299; text-decoration: none;">
+                                <i class="ri-tv-fill" style="font-size: 1.5rem; color: #FB7299; margin-right: 0.75rem;"></i>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary);">B站空间</div>
+                                    <div style="font-weight: 600; color: var(--text);">昱君NAS</div>
+                                </div>
+                                <i class="ri-external-link-line" style="color: var(--text-tertiary);"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="info-section">
+                        <h3><i class="ri-gift-fill"></i> 支持项目</h3>
+                        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 1rem;">如果我的项目帮助到你，欢迎随意打赏</p>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                            <div style="text-align: center;">
+                                <div style="background: white; padding: 1rem; border-radius: 8px; margin-bottom: 0.5rem;">
+                                    <img src="/static/zfb.png" alt="支付宝" style="width: 100%; height: auto; max-width: 150px;" onerror="this.style.display='none'">
+                                </div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                    <i class="ri-alipay-fill" style="color: #1677FF;"></i> 支付宝
+                                </div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="background: white; padding: 1rem; border-radius: 8px; margin-bottom: 0.5rem;">
+                                    <img src="/static/wx.png" alt="微信" style="width: 100%; height: auto; max-width: 150px;" onerror="this.style.display='none'">
+                                </div>
+                                <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                    <i class="ri-wechat-pay-fill" style="color: #07C160;"></i> 微信
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- 底部导航栏 -->
+    <nav class="mobile-bottom-nav">
+        <a href="#" class="bottom-nav-item active" onclick="navigateTo('dashboard'); return false;">
+            <i class="ri-dashboard-fill"></i>
+            <span>首页</span>
+        </a>
+        <a href="#" class="bottom-nav-item" onclick="navigateTo('containers'); return false;">
+            <i class="ri-server-fill"></i>
+            <span>容器</span>
+        </a>
+        <a href="#" class="bottom-nav-item" onclick="navigateTo('files'); return false;">
+            <i class="ri-folder-open-fill"></i>
+            <span>文件</span>
+        </a>
+        <a href="#" class="bottom-nav-item" onclick="navigateTo('projects'); return false;">
+            <i class="ri-folder-fill"></i>
+            <span>项目</span>
+        </a>
+        <a href="#" class="bottom-nav-item" onclick="navigateTo('settings'); return false;">
+            <i class="ri-settings-fill"></i>
+            <span>设置</span>
+        </a>
+    </nav>
+
+    <!-- 通知容器 -->
+    <div class="notification-container" id="notificationContainer"></div>
+
+    <!-- 移动端日志面板 -->
+    <div class="mobile-log-panel" id="mobileLogPanel">
+        <div class="log-panel-overlay" onclick="toggleMobileLogPanel()"></div>
+        <div class="log-panel-content">
+            <div class="log-panel-header">
+                <div class="log-panel-title">
+                    <i class="ri-file-list-3-line"></i> 实时日志
+                </div>
+                <button class="log-panel-close" onclick="toggleMobileLogPanel()">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            
+            <!-- 日志统计 -->
+            <div class="log-stats">
+                <div class="log-stat-item active" onclick="filterMobileLogs('all', this)">
+                    <span>全部</span>
+                    <span class="log-count" id="mobileLogStatTotal">0</span>
+                </div>
+                <div class="log-stat-item" onclick="filterMobileLogs('INFO', this)">
+                    <span>信息</span>
+                    <span class="log-count" id="mobileLogStatInfo">0</span>
+                </div>
+                <div class="log-stat-item" onclick="filterMobileLogs('SUCCESS', this)">
+                    <span>成功</span>
+                    <span class="log-count" id="mobileLogStatSuccess">0</span>
+                </div>
+                <div class="log-stat-item" onclick="filterMobileLogs('WARNING', this)">
+                    <span>警告</span>
+                    <span class="log-count" id="mobileLogStatWarning">0</span>
+                </div>
+                <div class="log-stat-item" onclick="filterMobileLogs('ERROR', this)">
+                    <span>错误</span>
+                    <span class="log-count" id="mobileLogStatError">0</span>
+                </div>
+            </div>
+
+            <!-- 日志控制 -->
+            <div class="log-controls">
+                <button class="log-control-btn" onclick="toggleMobileLogPause()" id="mobileLogPauseBtn">
+                    <i class="ri-pause-fill" id="mobileLogPauseIcon"></i>
+                </button>
+                <button class="log-control-btn" onclick="toggleMobileAutoScroll()" id="mobileAutoScrollBtn">
+                    <i class="ri-arrow-down-double-fill" id="mobileAutoScrollIcon"></i>
+                </button>
+                <button class="log-control-btn" onclick="clearMobileLogs()">
+                    <i class="ri-delete-bin-line"></i>
+                </button>
+            </div>
+
+            <!-- 日志内容 -->
+            <div class="log-panel-body" id="mobileLogPanelBody">
+                <div class="log-empty">
+                    <div class="log-empty-icon"><i class="ri-inbox-line"></i></div>
+                    <div>暂无日志</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 文件管理器设置弹窗 -->
+    <div class="mobile-modal" id="mobileFileManagerSettingsModal">
+        <div class="mobile-modal-content" style="max-height: 90vh; display: flex; flex-direction: column;">
+            <div class="mobile-modal-header">
+                <h3><i class="ri-settings-3-line"></i> 文件管理器设置</h3>
+                <button class="btn-icon" onclick="closeMobileFileManagerSettings()">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            <div class="mobile-modal-body" style="flex: 1; overflow-y: auto; padding: 1rem;">
+                <!-- 安全警告提示 -->
+                <div style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white; padding: 0.75rem; border-radius: 0.5rem; margin-bottom: 1rem;">
+                    <div style="display: flex; align-items: flex-start; gap: 0.5rem;">
+                        <i class="ri-alarm-warning-fill" style="font-size: 1.1rem; flex-shrink: 0; margin-top: 0.1rem;"></i>
+                        <div style="font-size: 0.8rem; line-height: 1.4;">
+                            <strong>⚠️ 直接操作宿主机文件系统</strong><br>
+                            误操作可能导致系统崩溃或数据丢失
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 根目录路径 -->
+                <div style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-secondary); border-radius: 0.5rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem;">
+                        <i class="ri-home-line"></i> 首页根目录
+                    </label>
+                    <input type="text" id="mobileFmRootPath" placeholder="/"
+                           style="width: 100%; padding: 0.6rem; border: 1px solid var(--border); border-radius: 0.375rem; background: var(--bg-primary); color: var(--text); font-size: 0.9rem; box-sizing: border-box;">
+                    <div style="margin-top: 0.4rem; font-size: 0.75rem; color: var(--text-secondary);">
+                        <i class="ri-information-line"></i> 例如：/ 或 /home/user
+                    </div>
+                </div>
+
+                <!-- 显示模式 -->
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem;">
+                        <i class="ri-eye-line"></i> 首页显示模式
+                    </label>
+                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                        <label class="mobile-fm-mode-option" data-mode="all" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; background: var(--bg-secondary); border-radius: 0.5rem; cursor: pointer; border: 2px solid transparent;">
+                            <input type="radio" name="mobileFmDisplayMode" value="all" style="accent-color: var(--primary);">
+                            <div>
+                                <div style="font-weight: 500; font-size: 0.9rem;">全部显示</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">显示所有目录，不进行过滤</div>
+                            </div>
+                        </label>
+                        <label class="mobile-fm-mode-option" data-mode="whitelist" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; background: var(--bg-secondary); border-radius: 0.5rem; cursor: pointer; border: 2px solid transparent;">
+                            <input type="radio" name="mobileFmDisplayMode" value="whitelist" style="accent-color: var(--primary);">
+                            <div>
+                                <div style="font-weight: 500; font-size: 0.9rem;">白名单模式</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">只显示选中的项目</div>
+                            </div>
+                        </label>
+                        <label class="mobile-fm-mode-option" data-mode="blacklist" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; background: var(--bg-secondary); border-radius: 0.5rem; cursor: pointer; border: 2px solid transparent;">
+                            <input type="radio" name="mobileFmDisplayMode" value="blacklist" style="accent-color: var(--primary);">
+                            <div>
+                                <div style="font-weight: 500; font-size: 0.9rem;">黑名单模式</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">排除选中的项目</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 目录选择区域 -->
+                <div id="mobileFmDirectorySelectArea" style="display: none; margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem;">
+                        <i class="ri-folder-check-line"></i> <span id="mobileFmDirectorySelectLabel">选择项目</span>
+                    </label>
+                    <div id="mobileFmDirectoryList" style="max-height: 200px; overflow-y: auto; border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.5rem; background: var(--bg-primary);">
+                        <div style="text-align: center; padding: 1rem; color: var(--text-secondary);">
+                            <i class="ri-loader-4-line ri-spin"></i> 加载中...
+                        </div>
+                    </div>
+                    <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+                        <button onclick="selectAllMobileFmDirectories()" class="btn btn-small btn-secondary" style="font-size: 0.8rem;">
+                            <i class="ri-checkbox-multiple-line"></i> 全选
+                        </button>
+                        <button onclick="deselectAllMobileFmDirectories()" class="btn btn-small btn-secondary" style="font-size: 0.8rem;">
+                            <i class="ri-checkbox-blank-line"></i> 取消全选
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 权限模式 -->
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 600; font-size: 0.9rem;">
+                        <i class="ri-shield-check-line"></i> 操作权限
+                    </label>
+                    <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+                        <label class="mobile-fm-permission-option" data-mode="readonly" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; background: var(--bg-secondary); border-radius: 0.5rem; cursor: pointer; border: 2px solid transparent;">
+                            <input type="radio" name="mobileFmPermissionMode" value="readonly" style="accent-color: var(--primary);">
+                            <div>
+                                <div style="font-weight: 500; font-size: 0.9rem;"><i class="ri-eye-line" style="color: var(--info);"></i> 只读模式</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">仅允许查看和下载文件</div>
+                            </div>
+                        </label>
+                        <label class="mobile-fm-permission-option" data-mode="readwrite" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; background: var(--bg-secondary); border-radius: 0.5rem; cursor: pointer; border: 2px solid transparent;">
+                            <input type="radio" name="mobileFmPermissionMode" value="readwrite" style="accent-color: var(--primary);">
+                            <div>
+                                <div style="font-weight: 500; font-size: 0.9rem;"><i class="ri-edit-line" style="color: var(--success);"></i> 读写模式</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">允许所有文件操作</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="mobile-modal-footer" style="padding: 0.75rem 1rem; border-top: 1px solid var(--border); display: flex; gap: 0.5rem;">
+                <button class="btn btn-secondary" onclick="closeMobileFileManagerSettings()" style="flex: 1;">取消</button>
+                <button class="btn btn-primary" onclick="saveMobileFileManagerSettings()" style="flex: 1;">
+                    <i class="ri-save-line"></i> 保存
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建文件/文件夹选择弹窗 -->
+    <div class="mobile-modal" id="mobileNewItemModal">
+        <div class="mobile-modal-content" style="max-width: 320px;">
+            <div class="mobile-modal-header">
+                <h3><i class="ri-add-circle-line"></i> 新建</h3>
+                <button class="btn-icon" onclick="closeMobileNewItemModal()">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            <div class="mobile-modal-body" style="padding: 1rem;">
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <button class="btn btn-secondary" onclick="showMobileNewFileDialog()" style="display: flex; align-items: center; gap: 0.75rem; padding: 1rem; justify-content: flex-start;">
+                        <i class="ri-file-add-line" style="font-size: 1.5rem; color: var(--primary);"></i>
+                        <div style="text-align: left;">
+                            <div style="font-weight: 500;">新建文件</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">创建一个空白文件</div>
+                        </div>
+                    </button>
+                    <button class="btn btn-secondary" onclick="showMobileNewFolderDialog()" style="display: flex; align-items: center; gap: 0.75rem; padding: 1rem; justify-content: flex-start;">
+                        <i class="ri-folder-add-line" style="font-size: 1.5rem; color: var(--warning);"></i>
+                        <div style="text-align: left;">
+                            <div style="font-weight: 500;">新建文件夹</div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">创建一个新文件夹</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 文件管理器设置密码验证弹窗 -->
+    <div class="mobile-modal" id="mobileFileManagerPasswordModal">
+        <div class="mobile-modal-content">
+            <div class="mobile-modal-header">
+                <h3><i class="ri-lock-line"></i> 验证密码</h3>
+                <button class="btn-icon" onclick="closeMobileFileManagerPassword()">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            <div class="mobile-modal-body" style="padding: 1rem;">
+                <p style="margin-bottom: 1rem; color: var(--text-secondary); font-size: 0.9rem;">
+                    请输入登录密码以访问文件管理器设置
+                </p>
+                <div style="margin-bottom: 0.5rem;">
+                    <input type="password" id="mobileFmSettingsPassword" placeholder="请输入密码"
+                           style="width: 100%; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--bg-primary); color: var(--text); box-sizing: border-box;"
+                           onkeypress="if(event.key==='Enter') verifyMobileFileManagerPassword()">
+                </div>
+                <div id="mobileFmPasswordError" style="display: none; color: var(--danger); font-size: 0.85rem; margin-top: 0.5rem;">
+                    <i class="ri-error-warning-line"></i> 密码错误
+                </div>
+            </div>
+            <div class="mobile-modal-footer" style="padding: 0.75rem 1rem; border-top: 1px solid var(--border); display: flex; gap: 0.5rem;">
+                <button class="btn btn-secondary" onclick="closeMobileFileManagerPassword()" style="flex: 1;">取消</button>
+                <button class="btn btn-primary" onclick="verifyMobileFileManagerPassword()" style="flex: 1;">
+                    <i class="ri-check-line"></i> 验证
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 使用原生WebSocket，不需要socket.io -->
+    <script src="/static/js/mobile.min.js?v=latest-2603271513"></script>
+    <script>
+        // 快速恢复移动端主题（避免闪烁）
+        (function() {
+            const savedTheme = localStorage.getItem('mobile-theme');
+            if (savedTheme === 'light') {
+                document.documentElement.setAttribute('data-theme', 'light');
+            }
+        })();
+        
+        // APP内隐藏退出登录和电脑页按钮（由APP悬浮按钮处理）
+        (function() {
+            if (/DIANCUP-Android/i.test(navigator.userAgent)) {
+                var desktop = document.getElementById('menuDesktopItem');
+                var logout = document.getElementById('menuLogoutItem');
+                if (desktop) desktop.style.display = 'none';
+                if (logout) logout.style.display = 'none';
+            }
+        })();
+    </script>
+</body>
+</html>

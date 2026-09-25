@@ -1,0 +1,27 @@
+# Docker Control（自建完整镜像版）
+# ★ 以后部署只拉自己的镜像：ghcr.io/fujiwareshine/docker-control
+#    前端已打入镜像，不再需要 ./static 挂载覆盖
+# 部署：把本目录传到 NAS/服务器，改 DOCKER_DIR 后 docker compose up -d
+services:
+  diancup:
+    image: ghcr.io/fujiwareshine/docker-control:latest   # ★ 我们的镜像（首次拉取需 GHCR 登录，见 README）
+    container_name: diancup
+    restart: unless-stopped
+    network_mode: host              # host 网络：端口页完整功能（/proc/net 扫描宿主机全端口）
+    # ports:                        # ← 如改回 bridge 网络则取消注释，同时注释上一行
+    #   - "9527:9527"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # ★ 必需：Docker Engine API
+      - ./config:/config              # 配置与 SQLite 数据库
+      # （v0.4 起 static 已打入镜像；如需临时改前端调试，可临时挂载本地 static 覆盖）
+      # - ./static:/app/static
+    environment:
+      - DOCKER_DIR=/your/docker/path  # ★ 改成你的 Docker compose 配置目录
+      - WEB_PORT=9527
+      - TZ=Asia/Shanghai
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    labels:
+      - diancup.self=true             # diancup 防自杀保护标记，不可删

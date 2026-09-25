@@ -1,0 +1,6 @@
+# 运行时数据与本地备份不入库
+config/
+*.orig
+*.bak
+*.pyc
+__pycache__/

@@ -1,0 +1,1203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSH 终端管理 - DIANCUP</title>
+    <link rel="icon" href="/static/ico.png?v=2" type="image/png">
+    <!-- 字体文件必须在主CSS之前加载 -->
+    <link rel="stylesheet" href="/static/fonts/cybernav-fonts.css">
+    <link rel="stylesheet" href="/static/fonts/remixicon.css">
+    <link rel="stylesheet" href="/static/css/style.min.css?v=latest-2603271513">
+    <!-- 版本控制脚本（必须最先加载） -->
+    <script src="/static/js/version.min.js?v=latest-2603271513"></script>
+    <script src="/static/js/THEME_COLORS.min.js?v=latest-2603271513"></script>
+</head>
+<body style="overflow: hidden; background: var(--bg);">
+    <!-- 移动端提示遮罩 -->
+    <div id="mobileWarning" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(10, 10, 31, 0.98); z-index: 99999; backdrop-filter: blur(10px);">
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 2rem; text-align: center;">
+            <div style="font-size: 5rem; margin-bottom: 2rem; animation: pulse 2s ease-in-out infinite;"><i class="ri-cpu-fill"></i></div>
+            <h1 style="color: var(--primary); font-size: 2rem; margin-bottom: 1rem; font-weight: bold;">SSH 终端功能</h1>
+            <p style="color: var(--text-secondary); font-size: 1.2rem; line-height: 1.8; max-width: 500px; margin-bottom: 2rem;">
+                SSH 终端功能需要在 <strong style="color: var(--primary);">PC 端</strong>使用，以获得最佳体验。
+            </p>
+            <div style="background: var(--theme-card-bg-light); border: 2px solid var(--theme-border); border-radius: 12px; padding: 1.5rem; max-width: 500px; margin-bottom: 2rem;">
+                <p style="color: var(--theme-text-secondary); font-size: 0.95rem; line-height: 1.6; margin: 0;">
+                    移动设备屏幕较小，无法完整显示终端界面和文件管理器。<br>
+                    请使用电脑浏览器访问以使用完整功能。
+                </p>
+            </div>
+            <a href="/" class="btn btn-success" style="text-decoration: none; font-size: 1.1rem; padding: 1rem 2rem;">
+                <i class="ri-home-5-fill"></i> 返回主页
+            </a>
+        </div>
+    </div>
+    
+    <!-- SSH页面使用主题背景 -->
+    <script>
+        // 在页面加载时立即应用主题
+        (async function applySSHTheme() {
+            try {
+                const response = await fetch('/api/user-prefs/get');
+                const result = await response.json();
+
+                if (result.success && result.data.page_theme) {
+                    const themeName = result.data.page_theme.theme;
+                    const html = document.documentElement;
+
+                    // 查找主题配置
+                    let themeConfig = null;
+                    if (themeName === 'custom') {
+                        themeConfig = {
+                            name: '自定义主题',
+                            type: 'custom',
+                            colors: result.data.page_theme.customColors || {}
+                        };
+                    } else if (THEME_COLORS[themeName]) {
+                        themeConfig = THEME_COLORS[themeName];
+                    } else {
+                        themeConfig = THEME_COLORS['deep-black'];
+                    }
+
+                    if (themeConfig && themeConfig.colors) {
+                        const colors = themeConfig.colors;
+
+                        // 应用所有主题变量
+                        html.style.setProperty('--bg', colors.bg);
+                        html.style.setProperty('--bg-secondary', colors.bgSecondary);
+                        html.style.setProperty('--bg-tertiary', colors.bgTertiary);
+                        html.style.setProperty('--bg-elevated', colors.bgElevated);
+                        html.style.setProperty('--bg-overlay', colors.bgOverlay);
+                        html.style.setProperty('--bg-mask', colors.bgMask);
+
+                        html.style.setProperty('--primary', colors.primary);
+                        html.style.setProperty('--primary-hover', colors.primaryHover);
+                        html.style.setProperty('--primary-active', colors.primaryActive);
+                        html.style.setProperty('--primary-light', colors.primaryLight);
+                        html.style.setProperty('--primary-text', colors.primaryText);
+
+                        html.style.setProperty('--text', colors.text);
+                        html.style.setProperty('--text-secondary', colors.textSecondary);
+                        html.style.setProperty('--text-tertiary', colors.textTertiary);
+
+                        html.style.setProperty('--border', colors.border);
+                        html.style.setProperty('--border-light', colors.borderLight);
+
+                        html.style.setProperty('--success', colors.success);
+                        html.style.setProperty('--danger', colors.danger);
+                        html.style.setProperty('--warning', colors.warning);
+                        html.style.setProperty('--info', colors.info);
+                        html.style.setProperty('--accent', colors.primary);
+
+                        html.style.setProperty('--shadow', colors.shadow);
+                        html.style.setProperty('--shadow-large', colors.shadowLarge);
+                        html.style.setProperty('--shadow-xlarge', colors.shadowXlarge);
+
+                        // 旧主题变量映射(向后兼容)
+                        html.style.setProperty('--theme-card-bg-light', colors.bgTertiary);
+                        html.style.setProperty('--theme-text-primary', colors.text);
+                        html.style.setProperty('--theme-text-secondary', colors.textSecondary);
+                        html.style.setProperty('--theme-text-tertiary', colors.textTertiary);
+                        html.style.setProperty('--theme-border', colors.border);
+                        html.style.setProperty('--theme-success-bg', colors.successLight);
+                        html.style.setProperty('--theme-success-item-bg', colors.successLight);
+                        html.style.setProperty('--theme-warning-item-bg', colors.warningLight);
+                    }
+
+                    // 如果是自定义背景图片
+                    if (themeName === 'custom' && result.data.page_theme.customBg) {
+                        html.style.setProperty('--bg', `url(${result.data.page_theme.customBg})`);
+                        html.style.setProperty('--bg-size', 'cover');
+                        html.style.setProperty('--bg-position', 'center');
+                    }
+                }
+            } catch (error) {
+                console.error('加载主题设置失败:', error);
+                // 使用默认主题
+                const html = document.documentElement;
+                const defaultTheme = THEME_COLORS['deep-black'];
+                if (defaultTheme && defaultTheme.colors) {
+                    const colors = defaultTheme.colors;
+                    html.style.setProperty('--bg', colors.bg);
+                    html.style.setProperty('--bg-secondary', colors.bgSecondary);
+                    html.style.setProperty('--bg-tertiary', colors.bgTertiary);
+                    html.style.setProperty('--text', colors.text);
+                    html.style.setProperty('--text-secondary', colors.textSecondary);
+                }
+            }
+        })();
+    </script>
+    
+    <!-- 顶部通知容器 -->
+    <div class="notification-container" id="notificationContainer"></div>
+    
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="nav-content" style="justify-content: space-between;">
+            <div class="logo" onclick="window.location.href='/'" style="cursor: pointer;" title="返回主页">
+                <img src="/static/logo.png" alt="Logo" class="logo-img" onerror="this.style.display='none'">
+                <div class="logo-text">DIANCUP-SSH</div>
+            </div>
+            <!-- 一言显示区域（导航栏中间） -->
+            <div class="hitokoto-nav" id="hitokotoNav">
+                <div class="hitokoto-text" id="hitokotoText">加载中...</div>
+                <div class="hitokoto-from" id="hitokotoFrom"></div>
+            </div>
+            <div class="nav-actions">
+                <a href="/" class="btn btn-small" style="text-decoration: none;" title="返回主页">
+                    <i class="ri-home-5-fill"></i> 主页
+                </a>
+                <button class="btn btn-small" onclick="toggleTerminalAppearanceSettings()" title="终端外观设置">
+                    <i class="ri-palette-fill"></i> 外观设置
+                </button>
+                <button class="btn btn-small btn-danger" onclick="logout()" title="退出登录"><i class="ri-door-open-fill"></i> 登出</button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 文件重命名弹窗 -->
+    <div class="file-editor-modal" id="fileRenameModal">
+        <div class="file-editor-container" style="height: auto; max-width: 500px;">
+            <div class="file-editor-header">
+                <div class="file-editor-title">重命名文件/文件夹</div>
+                <span class="log-panel-close" onclick="closeRenameModal()" style="cursor: pointer;"><i class="ri-close-line"></i></span>
+            </div>
+            <div class="file-editor-body" style="padding: 1.5rem;">
+                <input type="text" class="ssh-form-input" id="renameInput" placeholder="请输入新名称">
+            </div>
+            <div class="file-editor-footer">
+                <button class="btn btn-small" onclick="closeRenameModal()">取消</button>
+                <button class="btn btn-small btn-success" onclick="confirmRename()"><i class="ri-save-3-fill"></i> 确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建文件/文件夹弹窗 -->
+    <div class="file-editor-modal" id="newItemModal">
+        <div class="file-editor-container" style="height: auto; max-width: 500px;">
+            <div class="file-editor-header">
+                <div class="file-editor-title" id="newItemTitle">新建文件</div>
+                <span class="log-panel-close" onclick="closeNewItemModal()" style="cursor: pointer;"><i class="ri-close-line"></i></span>
+            </div>
+            <div class="file-editor-body" style="padding: 1.5rem;">
+                <input type="text" class="ssh-form-input" id="newItemInput" placeholder="请输入名称">
+            </div>
+            <div class="file-editor-footer">
+                <button class="btn btn-small" onclick="closeNewItemModal()">取消</button>
+                <button class="btn btn-small btn-success" onclick="confirmNewItem()"><i class="ri-checkbox-circle-fill"></i> 创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通用确认对话框 -->
+    <div class="file-editor-modal" id="confirmModal">
+        <div class="file-editor-container" style="height: auto; max-width: 500px;">
+            <div class="file-editor-header">
+                <div class="file-editor-title" id="confirmTitle">确认操作</div>
+                <span class="log-panel-close" onclick="closeConfirmModal(false)" style="cursor: pointer;"><i class="ri-close-line"></i></span>
+            </div>
+            <div class="file-editor-body" style="padding: 2rem; text-align: center;">
+                <div id="confirmMessage" style="font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 1.5rem;">
+                    确定要执行此操作吗？
+                </div>
+            </div>
+            <div class="file-editor-footer">
+                <button class="btn btn-small" onclick="closeConfirmModal(false)">取消</button>
+                <button class="btn btn-small btn-danger" id="confirmBtn" onclick="closeConfirmModal(true)">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SSH 终端主面板 -->
+    <div class="ssh-panel show" id="sshPanel">
+        <!-- 左侧恢复按钮（屏幕边缘） -->
+        <button class="panel-restore-btn panel-restore-btn-left" id="leftRestoreBtn" onclick="toggleLeftPanel()" title="恢复左侧面板" style="display: none;">
+            &gt;
+        </button>
+        
+        <!-- 右侧恢复按钮（屏幕边缘） -->
+        <button class="panel-restore-btn panel-restore-btn-right" id="rightRestoreBtn" onclick="toggleRightPanel()" title="恢复右侧面板" style="display: none;">
+            &lt;
+        </button>
+        
+        <div class="ssh-body" id="sshBody" style="grid-template-columns: 300px 1fr 350px; height: 100%;">
+            <!-- 左侧：服务器连接 + 系统信息 + 快捷命令 + 自定义命令 -->
+            <div class="ssh-config-panel" id="sshConfigPanel" style="overflow-y: auto;">
+                <!-- 折叠按钮（连接后显示） -->
+                <button class="panel-collapse-btn panel-collapse-btn-left" id="leftCollapseBtn" onclick="toggleLeftPanel()" title="折叠左侧面板" style="display: none;">
+                    &lt;
+                </button>
+                
+                <!-- 服务器连接区域 -->
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                    <div class="ssh-config-title" style="margin-bottom: 0;"><i class="ri-plug-fill"></i> 服务器连接</div>
+                    <!-- 连接状态移到标题后面 -->
+                    <div class="ssh-status disconnected" id="sshStatus" style="margin-bottom: 0; font-size: 0.75rem; padding: 0.3rem 0.6rem;">
+                        <i class="ri-close-circle-fill"></i> 未连接
+                    </div>
+                </div>
+                
+                <!-- 自定义服务器选择下拉框 -->
+                <div class="custom-select-wrapper" style="margin-bottom: 0.5rem;">
+                    <div class="custom-select-trigger" id="serverSelectTrigger" onclick="toggleServerDropdown()">
+                        <div class="custom-select-content">
+                            <span class="custom-select-icon"><i class="ri-computer-line"></i></span>
+                            <div class="custom-select-text">
+                                <div class="custom-select-placeholder" id="serverSelectPlaceholder">-- 选择服务器 --</div>
+                            </div>
+                        </div>
+                        <span class="custom-select-arrow">▼</span>
+                    </div>
+                    <div class="custom-select-dropdown" id="serverSelectDropdown">
+                        <!-- 动态填充服务器列表 -->
+                    </div>
+                </div>
+
+                <!-- 密码输入框（仅在需要时显示） -->
+                <form id="quickPasswordInputContainer" style="display: none; margin-bottom: 0.5rem; position: relative;" onsubmit="event.preventDefault(); quickConnectServer()">
+                    <input type="password" class="ssh-form-input" id="quickPasswordInput" placeholder="请输入SSH密码" style="width: 100%; font-size: 0.85rem; padding: 0.6rem; padding-right: 2.5rem;">
+                    <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('quickPasswordInput')" title="显示/隐藏密码" style="position: absolute; right: 0.3rem; top: 50%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; padding: 0.3rem;">
+                        <span class="eye-icon" style="font-size: 1rem;"><i class="ri-eye-fill"></i></span>
+                    </button>
+                </form>
+                
+                <!-- 连接按钮组 -->
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <button class="btn btn-small btn-danger" id="disconnectBtn" onclick="disconnectSSH()" style="flex: 1; font-size: 0.75rem; padding: 0.5rem;" disabled>
+                        <i class="ri-plug-fill"></i> 断开
+                    </button>
+                    <button class="btn btn-small" onclick="showServerManager()" style="flex: 1; font-size: 0.75rem; padding: 0.5rem;">
+                        <i class="ri-settings-4-fill"></i> 管理
+                    </button>
+                </div>
+                
+                <!-- 使用文档按钮 -->
+                <button class="btn btn-full btn-success" onclick="showSSHHelp()" style="margin-bottom: 1rem; font-size: 0.85rem; padding: 0.75rem;">
+                    <i class="ri-book-open-fill"></i> 使用文档
+                </button>
+
+                <!-- 快捷指令 -->
+                <div class="ssh-config-title" style="margin-top: 1rem;"><i class="ri-flashlight-fill"></i> 快捷指令</div>
+                <div class="ssh-quick-commands">
+                    <button class="ssh-quick-cmd-btn" onclick="sendSSHCommand('sudo -i')">
+                        <i class="ri-vip-crown-fill"></i> 提权
+                    </button>
+                    <button class="ssh-quick-cmd-btn" onclick="quickDeployWithCheck()">
+                        <i class="ri-rocket-2-fill"></i> 快捷部署
+                    </button>
+                    <button class="ssh-quick-cmd-btn" onclick="sendSSHCommand('ip addr show')">
+                        <i class="ri-global-line"></i> 网络信息
+                    </button>
+                    <button class="ssh-quick-cmd-btn" onclick="sendSSHCommand('df -h')">
+                        <i class="ri-save-3-fill"></i> 磁盘查看
+                    </button>
+                    <button class="ssh-quick-cmd-btn" onclick="sendSSHCommand('clear')">
+                        <i class="ri-delete-bin-2-fill"></i> 清屏
+                    </button>
+                </div>
+                
+                <!-- 自定义快捷命令 -->
+                <div class="ssh-config-title" style="margin-top: 1rem;"><i class="ri-tools-fill"></i> 自定义命令</div>
+                <!-- 自定义命令下拉框 -->
+                <div class="custom-select-wrapper" style="margin-bottom: 0.5rem;">
+                    <div class="custom-select-trigger" id="customCmdSelectTrigger" onclick="toggleCustomCmdDropdown()">
+                        <div class="custom-select-content">
+                            <span class="custom-select-icon"><i class="ri-flashlight-fill"></i></span>
+                            <div class="custom-select-text">
+                                <div class="custom-select-placeholder" id="customCmdSelectPlaceholder">-- 选择命令执行 --</div>
+                            </div>
+                        </div>
+                        <span class="custom-select-arrow">▼</span>
+                    </div>
+                    <div class="custom-select-dropdown dropup" id="customCmdSelectDropdown">
+                        <!-- 动态填充命令列表 -->
+                    </div>
+                </div>
+                
+                <!-- 管理按钮 -->
+                <button class="btn btn-small" onclick="showCustomCommandList()" style="width: 100%; font-size: 0.85rem; padding: 0.75rem;">
+                    <i class="ri-clipboard-fill"></i> 管理命令
+                </button>
+            </div>
+            
+            <!-- 中间：终端面板 -->
+            <div class="ssh-terminal-panel">
+                <div class="ssh-terminal-container">
+                    <div id="ssh-terminal"></div>
+                </div>
+                
+                <div class="ssh-input-container">
+                    <input type="text" 
+                           class="ssh-command-input" 
+                           id="sshCommandInput" 
+                           placeholder="在此输入命令... (Enter 发送)"
+                           onkeypress="handleSSHInputKeypress(event)">
+                    <button class="btn btn-small" onclick="sendSSHInputCommand()">
+                        <i class="ri-upload-2-fill"></i> 发送
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 右侧：文件管理器 -->
+            <div class="ssh-file-manager" id="sshFileManager">
+                <!-- 折叠按钮（连接后显示） -->
+                <button class="panel-collapse-btn panel-collapse-btn-right" id="rightCollapseBtn" onclick="toggleRightPanel()" title="折叠右侧面板" style="display: none;">
+                    &gt;
+                </button>
+                
+                <div class="file-manager-header">
+                    <input type="text" class="file-path-input" id="filePathInput" value="/" readonly onclick="copyCurrentPath()" style="cursor: pointer; width: 100%; margin-bottom: 0.5rem;" title="点击复制路径">
+                    <div class="file-manager-actions">
+                        <a href="javascript:void(0)" onclick="showNewMenu(event)" class="file-action-link" title="新建"><i class="ri-add-line"></i> 新建</a>
+                        <a href="javascript:void(0)" onclick="uploadFile()" class="file-action-link" title="上传"><i class="ri-upload-2-fill"></i> 上传</a>
+                        <a href="javascript:void(0)" onclick="refreshFileList()" class="file-action-link" title="刷新"><i class="ri-refresh-line"></i> 刷新</a>
+                        <a href="javascript:void(0)" onclick="goToParentDir()" class="file-action-link" title="返回上级"><i class="ri-arrow-up-double-fill"></i> 上级</a>
+                    </div>
+                </div>
+                
+                <div class="file-list-flat" id="fileList">
+                    <div style="text-align: center; padding: 2rem; color: var(--theme-text-tertiary);">
+                        请先连接SSH
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div class="context-menu" id="contextMenu">
+        <div class="context-menu-item" onclick="copyFilePath()"><i class="ri-clipboard-fill"></i> 复制路径</div>
+        <div class="context-menu-divider" id="contextMenuDivider"></div>
+        <div class="context-menu-item" id="cdToDirectoryItem" onclick="cdToDirectory()"><i class="ri-folder-3-fill"></i> 进入目录</div>
+        <div class="context-menu-item" onclick="renameFile()"><i class="ri-edit-2-fill"></i> 重命名</div>
+        <div class="context-menu-item" id="editFileItem" onclick="editFile()"><i class="ri-edit-2-fill"></i> 编辑文件</div>
+        <div class="context-menu-item" onclick="deleteFile()"><i class="ri-delete-bin-fill"></i> 删除</div>
+    </div>
+    
+    <!-- 空白区域右键菜单 -->
+    <div class="context-menu" id="blankContextMenu">
+        <div class="context-menu-item" onclick="showNewFileDialog()"><i class="ri-file-text-fill"></i> 新建文件</div>
+        <div class="context-menu-item" onclick="showNewFolderDialog()"><i class="ri-folder-3-fill"></i> 新建文件夹</div>
+        <div class="context-menu-item" onclick="uploadFile()"><i class="ri-upload-2-fill"></i> 上传文件</div>
+    </div>
+    
+    <!-- 新建菜单 -->
+    <div class="context-menu" id="newMenu">
+        <div class="context-menu-item" onclick="showNewFileDialog()"><i class="ri-file-text-fill"></i> 新建文件</div>
+        <div class="context-menu-item" onclick="showNewFolderDialog()"><i class="ri-folder-3-fill"></i> 新建文件夹</div>
+    </div>
+    
+    <!-- 隐藏的文件上传input -->
+    <input type="file" id="fileUploadInput" style="display: none;" onchange="handleFileUpload(event)">
+    
+    <!-- 文件编辑器弹窗 -->
+    <div class="file-editor-modal" id="fileEditorModal">
+        <div class="file-editor-container">
+            <div class="file-editor-header">
+                <div class="file-editor-title" id="editorFileTitle">编辑文件</div>
+                <span class="log-panel-close" onclick="closeFileEditor()" style="cursor: pointer;"><i class="ri-close-line"></i></span>
+            </div>
+            <div class="file-editor-body">
+                <textarea class="file-editor-textarea" id="fileContentTextarea" placeholder="文件内容将在这里显示..."></textarea>
+            </div>
+            <div class="file-editor-footer">
+                <button class="btn btn-small" onclick="closeFileEditor()">取消</button>
+                <button class="btn btn-small btn-success" onclick="saveFileContent()"><i class="ri-save-3-fill"></i> 保存</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- SSH使用文档弹窗 -->
+    <div class="file-editor-modal" id="sshHelpModal">
+        <div class="file-editor-container" style="max-width: 1000px; width: 92%;">
+            <div class="file-editor-header">
+                <div class="file-editor-title"><i class="ri-book-open-fill"></i> SSH终端使用文档</div>
+                <span class="log-panel-close" onclick="closeSSHHelp()" style="cursor: pointer;"><i class="ri-close-line"></i></span>
+            </div>
+            <div class="file-editor-body" style="padding: 0; overflow-y: auto; max-height: 75vh;">
+                <div style="padding: 2.5rem 3.5rem 3rem 3.5rem;">
+                    <!-- 快速开始 -->
+                    <section style="margin-bottom: 3.5rem;">
+                        <h2 style="color: var(--primary); margin-bottom: 1.8rem; font-size: 1.5rem; display: flex; align-items: center; gap: 0.8rem; border-bottom: 3px solid var(--primary); padding-bottom: 1rem;">
+                            <span style="font-size: 1.8rem;"><i class="ri-crosshair-2-fill"></i></span>
+                            <span>快速开始</span>
+                        </h2>
+                        <ol style="line-height: 2.2; color: var(--text-secondary); padding-left: 2.5rem; margin: 0; font-size: 1.05rem; list-style-type: decimal;">
+                            <li style="margin-bottom: 1.5rem; padding-left: 0.5rem;">
+                                <div style="margin-bottom: 0.6rem;"><strong style="color: var(--primary); font-size: 1.1rem;">添加服务器配置</strong></div>
+                                <p style="color: var(--theme-text-primary); font-size: 0.95rem; line-height: 1.8; margin: 0;">
+                                    点击左侧<strong style="color: var(--primary); background: var(--theme-card-bg-light); padding: 0.25rem 0.7rem; border-radius: 5px;"><i class="ri-settings-4-fill"></i> 管理</strong>按钮打开服务器管理面板。填写服务器名称（如"生产服务器"）、IP地址或域名、SSH端口（默认22）、登录用户名。密码可选填，不填写则每次连接时手动输入。
+                                </p>
+                            </li>
+                            <li style="margin-bottom: 1.5rem; padding-left: 0.5rem;">
+                                <div style="margin-bottom: 0.6rem;"><strong style="color: var(--success); font-size: 1.1rem;">连接到服务器</strong></div>
+                                <p style="color: var(--theme-text-primary); font-size: 0.95rem; line-height: 1.8; margin: 0;">
+                                    在服务器下拉框中选择目标服务器。如果已保存密码，系统会自动连接；如果未保存密码，输入密码后点击<strong style="color: var(--success); background: var(--theme-success-bg); padding: 0.25rem 0.7rem; border-radius: 5px;"><i class="ri-link"></i> 连接</strong>按钮。首次连接成功后，系统会询问是否保存密码以便下次自动连接。
+                                </p>
+                            </li>
+                            <li style="margin-bottom: 1.5rem; padding-left: 0.5rem;">
+                                <div style="margin-bottom: 0.6rem;"><strong style="color: var(--warning); font-size: 1.1rem;">执行终端命令</strong></div>
+                                <p style="color: var(--theme-text-primary); font-size: 0.95rem; line-height: 1.8; margin: 0;">
+                                    连接成功后，中间区域显示SSH终端。可以直接在终端中输入命令并按Enter执行，也可以使用底部输入框输入命令后点击<i class="ri-upload-2-fill"></i>发送按钮。左侧提供常用快捷指令和自定义命令，点击即可一键执行。
+                                </p>
+                            </li>
+                            <li style="margin-bottom: 0; padding-left: 0.5rem;">
+                                <div style="margin-bottom: 0.6rem;"><strong style="color: var(--accent); font-size: 1.1rem;">管理远程文件</strong></div>
+                                <p style="color: var(--theme-text-primary); font-size: 0.95rem; line-height: 1.8; margin: 0;">
+                                    右侧文件管理器自动显示当前目录的文件列表。单击文件可直接编辑，单击目录可进入该目录。支持新建、上传、复制、粘贴、重命名、删除等完整文件操作。
+                                </p>
+                            </li>
+                        </ol>
+                    </section>
+                    
+                    <!-- 服务器管理 -->
+                    <section style="margin-bottom: 3.5rem;">
+                        <h2 style="color: var(--primary); margin-bottom: 1.8rem; font-size: 1.5rem; display: flex; align-items: center; gap: 0.8rem; border-bottom: 3px solid var(--primary); padding-bottom: 1rem;">
+                            <span style="font-size: 1.8rem;"><i class="ri-settings-4-fill"></i></span>
+                            <span>服务器管理</span>
+                        </h2>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                            <div style="padding: 1.5rem; padding-left: 2rem; border-left: 4px solid var(--success); background: var(--theme-success-item-bg); border-radius: 0 8px 8px 0;">
+                                <h3 style="color: var(--success); font-weight: 600; margin-bottom: 1rem; font-size: 1.15rem;"><i class="ri-add-line"></i> 添加服务器</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.9; margin: 0 0 0.8rem 0;">点击<strong><i class="ri-settings-4-fill"></i> 管理</strong>按钮打开管理面板，需要填写：</p>
+                                <ul style="color: var(--theme-text-primary); font-size: 0.92rem; line-height: 2; margin: 0; padding-left: 1.8rem;">
+                                    <li><strong style="color: var(--primary);">服务器名称</strong>：自定义名称便于识别</li>
+                                    <li><strong style="color: var(--primary);">服务器地址</strong>：IP或域名</li>
+                                    <li><strong style="color: var(--primary);">端口</strong>：SSH端口（默认22）</li>
+                                    <li><strong style="color: var(--primary);">用户名</strong>：登录用户名</li>
+                                    <li><strong style="color: var(--primary);">密码</strong>：可选，保存后自动连接</li>
+                                </ul>
+                            </div>
+                            <div style="padding: 1.5rem; padding-left: 2rem; border-left: 4px solid var(--warning); background: var(--theme-warning-item-bg); border-radius: 0 8px 8px 0;">
+                                <h3 style="color: var(--warning); font-weight: 600; margin-bottom: 1rem; font-size: 1.15rem;"><i class="ri-edit-2-fill"></i> 编辑与删除</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.9; margin: 0 0 0.8rem 0;"><strong style="color: var(--warning);">编辑服务器：</strong>在管理面板的服务器列表中点击<strong>编辑</strong>按钮，修改信息后点击<strong>保存</strong>。</p>
+                                <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.9; margin: 0;"><strong style="color: var(--danger);">删除服务器：</strong>点击<strong>删除</strong>按钮可移除服务器配置。删除操作需要确认，删除后无法恢复。</p>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <!-- 终端操作 -->
+                    <section style="margin-bottom: 3.5rem;">
+                        <h2 style="color: var(--primary); margin-bottom: 1.8rem; font-size: 1.5rem; display: flex; align-items: center; gap: 0.8rem; border-bottom: 3px solid var(--primary); padding-bottom: 1rem;">
+                            <span style="font-size: 1.8rem;"><i class="ri-keyboard-box-fill"></i></span>
+                            <span>终端操作</span>
+                        </h2>
+                        <div style="display: flex; flex-direction: column; gap: 2rem;">
+                            <div style="padding: 1.5rem; padding-left: 2rem; border-left: 4px solid var(--success); background: var(--theme-success-item-bg); border-radius: 0 8px 8px 0;">
+                                <h3 style="color: var(--success); font-weight: 600; margin-bottom: 1rem; font-size: 1.15rem;"><i class="ri-keyboard-box-fill"></i> 输入命令</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.9; margin: 0 0 0.8rem 0;">有两种方式输入命令：</p>
+                                <ul style="color: var(--theme-text-primary); font-size: 0.92rem; line-height: 2; margin: 0; padding-left: 1.8rem;">
+                                    <li><strong style="color: var(--primary);">直接在终端输入</strong>：点击终端区域，直接输入命令并按Enter执行</li>
+                                    <li><strong style="color: var(--primary);">使用输入框</strong>：在终端下方的输入框中输入命令，按Enter或点击<i class="ri-upload-2-fill"></i>发送按钮执行</li>
+                                </ul>
+                            </div>
+                            <div style="padding: 1.5rem; padding-left: 2rem; border-left: 4px solid var(--primary); background: var(--theme-card-bg-light); border-radius: 0 8px 8px 0;">
+                                <h3 style="color: var(--primary); font-weight: 600; margin-bottom: 1rem; font-size: 1.15rem;"><i class="ri-clipboard-fill"></i> 复制粘贴</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.9; margin: 0 0 0.8rem 0;">终端支持标准的复制粘贴操作：</p>
+                                <ul style="color: var(--theme-text-primary); font-size: 0.92rem; line-height: 2; margin: 0; padding-left: 1.8rem;">
+                                    <li><strong style="color: var(--success);">复制</strong>：选中文本后使用右键菜单复制</li>
+                                    <li><strong style="color: var(--success);">粘贴</strong>：使用右键菜单粘贴</li>
+                                </ul>
+                            </div>
+                            <div style="padding: 1.5rem; padding-left: 2rem; border-left: 4px solid var(--warning); background: var(--theme-warning-item-bg); border-radius: 0 8px 8px 0;">
+                                <h3 style="color: var(--warning); font-weight: 600; margin-bottom: 1rem; font-size: 1.15rem;"><i class="ri-flashlight-fill"></i> 快捷指令</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.9; margin: 0 0 0.8rem 0;">左侧面板提供常用快捷指令，点击即可一键执行：</p>
+                                <ul style="color: var(--theme-text-primary); font-size: 0.92rem; line-height: 2; margin: 0; padding-left: 1.8rem;">
+                                    <li><strong style="color: var(--primary);"><i class="ri-vip-crown-fill"></i> 提权</strong>：切换到root用户（sudo -i）</li>
+                                    <li><strong style="color: var(--primary);"><i class="ri-rocket-2-fill"></i> 快捷部署</strong>：执行一键部署脚本</li>
+                                    <li><strong style="color: var(--primary);"><i class="ri-global-line"></i> 网络信息</strong>：查看网络配置（ip addr show）</li>
+                                    <li><strong style="color: var(--primary);"><i class="ri-save-3-fill"></i> 磁盘查看</strong>：查看磁盘使用情况（df -h）</li>
+                                    <li><strong style="color: var(--primary);"><i class="ri-delete-bin-2-fill"></i> 清屏</strong>：清空终端显示（clear）</li>
+                                </ul>
+                            </div>
+                            <div style="padding: 1.5rem; padding-left: 2rem; border-left: 4px solid var(--accent); background: var(--theme-card-bg-light); border-radius: 0 8px 8px 0;">
+                                <h3 style="color: var(--accent); font-weight: 600; margin-bottom: 1rem; font-size: 1.15rem;"><i class="ri-tools-fill"></i> 自定义命令</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.9; margin: 0 0 0.8rem 0;">保存常用命令脚本，方便重复使用：</p>
+                                <ul style="color: var(--theme-text-primary); font-size: 0.92rem; line-height: 2; margin: 0; padding-left: 1.8rem;">
+                                    <li><strong style="color: var(--primary);">添加命令</strong>：点击<strong><i class="ri-clipboard-fill"></i> 管理命令</strong>按钮，输入命令名称和脚本内容</li>
+                                    <li><strong style="color: var(--primary);">执行命令</strong>：在自定义命令下拉框中选择命令即可执行</li>
+                                    <li><strong style="color: var(--primary);">多行脚本</strong>：支持保存多行复杂脚本，如批量操作、循环命令等</li>
+                                    <li><strong style="color: var(--primary);">编辑删除</strong>：在管理面板中可以编辑或删除已保存的命令</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <!-- 文件管理 -->
+                    <section style="margin-bottom: 3.5rem;">
+                        <h2 style="color: var(--primary); margin-bottom: 1.8rem; font-size: 1.5rem; display: flex; align-items: center; gap: 0.8rem; border-bottom: 3px solid var(--primary); padding-bottom: 1rem;">
+                            <span style="font-size: 1.8rem;"><i class="ri-folder-3-fill"></i></span>
+                            <span>文件管理</span>
+                        </h2>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem;">
+                            <div style="padding: 1.5rem; padding-left: 2rem; border-left: 4px solid var(--primary); background: var(--theme-card-bg-light); border-radius: 0 8px 8px 0;">
+                                <h3 style="color: var(--primary); font-weight: 600; margin-bottom: 1rem; font-size: 1.15rem;"><i class="ri-folder-open-fill"></i> 浏览与导航</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.9; margin: 0;">
+                                    右侧文件管理器显示当前目录的文件和文件夹。<strong style="color: var(--primary);">单击目录</strong>可进入该目录，<strong style="color: var(--primary);">点击<i class="ri-arrow-up-double-fill"></i>上级</strong>按钮返回上级目录。顶部路径输入框显示当前路径，点击可复制路径到剪贴板，方便在终端中使用。
+                                </p>
+                            </div>
+                            <div style="padding: 1.5rem; padding-left: 2rem; border-left: 4px solid var(--success); background: var(--theme-success-item-bg); border-radius: 0 8px 8px 0;">
+                                <h3 style="color: var(--success); font-weight: 600; margin-bottom: 1rem; font-size: 1.15rem;"><i class="ri-file-text-fill"></i> 编辑文件</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.9; margin: 0;">
+                                    <strong style="color: var(--success);">单击文件</strong>会自动打开编辑器。支持50+种文件类型，包括代码文件（.py、.js、.java等）、配置文件（.conf、.yaml、.json等）、文本文件等。编辑完成后点击<strong style="color: var(--success);"><i class="ri-save-3-fill"></i>保存</strong>按钮保存更改到服务器。
+                                </p>
+                            </div>
+                            <div style="padding: 1.5rem; padding-left: 2rem; border-left: 4px solid var(--warning); background: var(--theme-warning-item-bg); border-radius: 0 8px 8px 0;">
+                                <h3 style="color: var(--warning); font-weight: 600; margin-bottom: 1rem; font-size: 1.15rem;"><i class="ri-add-line"></i> 新建与上传</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.9; margin: 0 0 0.8rem 0;">
+                                    <strong style="color: var(--warning);">新建：</strong>点击顶部<strong><i class="ri-add-line"></i>新建</strong>按钮，选择新建文件或文件夹，输入名称后点击创建。
+                                </p>
+                                <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.9; margin: 0;">
+                                    <strong style="color: var(--accent);">上传：</strong>点击<strong><i class="ri-upload-2-fill"></i>上传</strong>按钮，选择本地文件上传到当前目录。支持上传任意类型的文件。
+                                </p>
+                            </div>
+                            <div style="padding: 1.5rem; padding-left: 2rem; border-left: 4px solid var(--accent); background: var(--theme-card-bg-light); border-radius: 0 8px 8px 0;">
+                                <h3 style="color: var(--accent); font-weight: 600; margin-bottom: 1rem; font-size: 1.15rem;"><i class="ri-mouse-fill"></i> 右键操作</h3>
+                                <p style="color: var(--text-secondary); font-size: 0.95rem; line-height: 1.9; margin: 0 0 0.8rem 0;">
+                                    在文件或文件夹上<strong style="color: var(--accent);">右键点击</strong>可打开菜单，支持：
+                                </p>
+                                <ul style="color: var(--theme-text-primary); font-size: 0.92rem; line-height: 2; margin: 0; padding-left: 1.8rem;">
+                                    <li><strong><i class="ri-clipboard-fill"></i> 复制路径</strong>：复制文件完整路径</li>
+                                    <li><strong><i class="ri-file-text-fill"></i> 复制/<i class="ri-scissors-cut-fill"></i>剪切</strong>：复制或剪切文件</li>
+                                    <li><strong><i class="ri-pushpin-fill"></i> 粘贴</strong>：粘贴已复制的文件</li>
+                                    <li><strong><i class="ri-edit-2-fill"></i> 重命名</strong>：修改文件名</li>
+                                    <li><strong><i class="ri-delete-bin-fill"></i> 删除</strong>：删除文件（需确认）</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+                    
+                    <!-- 实用技巧 -->
+                    <section>
+                        <h2 style="color: var(--warning); margin-bottom: 1.8rem; font-size: 1.5rem; display: flex; align-items: center; gap: 0.8rem; border-bottom: 3px solid var(--warning); padding-bottom: 1rem;">
+                            <span style="font-size: 1.8rem;"><i class="ri-lightbulb-flash-fill"></i></span>
+                            <span>实用技巧</span>
+                        </h2>
+                        <ul style="line-height: 2.5; color: var(--text-secondary); padding-left: 2.5rem; margin: 0; font-size: 1rem;">
+                            <li style="margin-bottom: 1rem;">
+                                <strong style="color: var(--primary);">路径快速复制：</strong>
+                                <span style="color: var(--theme-text-primary); font-size: 0.95rem;">文件路径输入框可点击复制，方便在终端中使用cd命令或其他需要路径的操作</span>
+                            </li>
+                            <li style="margin-bottom: 1rem;">
+                                <strong style="color: var(--success);">文件类型支持：</strong>
+                                <span style="color: var(--theme-text-primary); font-size: 0.95rem;">支持编辑代码、配置、文本等50+种文件类型，包括Python、JavaScript、Shell脚本、YAML、JSON等</span>
+                            </li>
+                            <li style="margin-bottom: 1rem;">
+                                <strong style="color: var(--warning);">多行脚本：</strong>
+                                <span style="color: var(--theme-text-primary); font-size: 0.95rem;">自定义命令支持多行脚本，可执行复杂操作如循环、条件判断、批量处理等</span>
+                            </li>
+                            <li style="margin-bottom: 1rem;">
+                                <strong style="color: var(--accent);">密码管理：</strong>
+                                <span style="color: var(--theme-text-primary); font-size: 0.95rem;">服务器密码采用加密存储，可选择保存密码实现自动连接，也可以每次手动输入以提高安全性</span>
+                            </li>
+                            <li style="margin-bottom: 0;">
+                                <strong style="color: var(--primary);">面板折叠：</strong>
+                                <span style="color: var(--theme-text-primary); font-size: 0.95rem;">连接成功后，左右两侧面板会显示折叠按钮，可以折叠面板以获得更大的终端显示区域</span>
+                            </li>
+                        </ul>
+                    </section>
+                </div>
+            </div>
+            <div class="file-editor-footer">
+                <label style="display: flex; align-items: center; gap: 0.5rem; flex: 1; cursor: pointer;">
+                    <input type="checkbox" id="dontShowAgain" style="cursor: pointer;">
+                    <span style="color: var(--text-secondary); font-size: 0.9rem;">下次不再显示</span>
+                </label>
+                <button class="btn btn-small btn-success" onclick="closeSSHHelp()">知道了</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自定义命令左侧滑出面板 -->
+    <div class="custom-cmd-slide-panel" id="customCmdSlidePanel">
+        <div class="custom-cmd-panel-header">
+            <div class="custom-cmd-panel-title"><i class="ri-clipboard-fill"></i> 自定义命令管理</div>
+            <span class="custom-cmd-panel-close" onclick="closeCustomCmdList()"><i class="ri-close-line"></i></span>
+        </div>
+        <div class="custom-cmd-panel-body" id="customCmdPanelBody">
+            <!-- 新增命令表单 -->
+            <div style="background: var(--theme-card-bg-light); border: 1px solid var(--theme-border-light); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                <h4 style="color: var(--primary); margin-bottom: 1rem; font-size: 0.95rem;"><i class="ri-add-line"></i> 新增命令</h4>
+                <div class="ssh-form-group">
+                    <label class="ssh-form-label">命令名称</label>
+                    <input type="text" class="ssh-form-input" id="newCmdName" placeholder="例如: 查看进程">
+                </div>
+                <div class="ssh-form-group">
+                    <label class="ssh-form-label">命令脚本</label>
+                    <textarea class="ssh-form-input" id="newCmdScript" placeholder="例如: ps aux | grep docker" rows="3"></textarea>
+                </div>
+                <button class="btn btn-small btn-success" onclick="saveNewCustomCommand()" style="width: 100%;">
+                    <i class="ri-checkbox-circle-fill"></i> 添加命令
+                </button>
+            </div>
+            
+            <!-- 已保存命令列表 -->
+            <h4 style="color: var(--primary); margin-bottom: 1rem; font-size: 0.95rem;"><i class="ri-clipboard-fill"></i> 已保存的命令</h4>
+            <div id="customCmdListContainer">
+                <!-- 动态填充 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 密码输入弹窗 -->
+    <div class="file-editor-modal" id="passwordModal">
+        <div class="file-editor-container" style="max-width: 400px; height: auto;">
+            <div class="file-editor-header">
+                <div class="file-editor-title"><i class="ri-lock-password-fill"></i> 输入密码</div>
+                <span class="log-panel-close" onclick="closePasswordModal()" style="cursor: pointer;"><i class="ri-close-line"></i></span>
+            </div>
+            <div class="file-editor-body" style="padding: 1.5rem;">
+                <div style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">服务器：</label>
+                    <div id="passwordModalServerName" style="padding: 0.75rem; background: var(--theme-card-bg-light); border: 1px solid var(--theme-border); border-radius: 6px; color: var(--primary); font-weight: 500;"></div>
+                </div>
+                <form style="position: relative;" onsubmit="event.preventDefault(); confirmPasswordAndConnect()">
+                    <label for="passwordInput" style="display: block; margin-bottom: 0.5rem; color: var(--text-secondary); font-size: 0.9rem;">密码：</label>
+                    <input type="password" id="passwordInput" class="ssh-form-input" placeholder="请输入SSH密码" style="width: 100%; padding-right: 2.5rem;">
+                    <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('passwordInput')" title="显示/隐藏密码" style="position: absolute; right: 0.5rem; top: 55%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; padding: 0.3rem;">
+                        <span class="eye-icon" style="font-size: 1rem;"><i class="ri-eye-fill"></i></span>
+                    </button>
+                </form>
+            </div>
+            <div class="file-editor-footer">
+                <button class="btn btn-small" onclick="closePasswordModal()">取消</button>
+                <button class="btn btn-small btn-success" onclick="confirmPasswordAndConnect()"><i class="ri-link"></i> 连接</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 服务器管理左侧滑出面板 -->
+    <div class="server-manager-slide-panel" id="serverManagerModal">
+        <div class="server-manager-panel-header">
+            <div class="server-manager-panel-title"><i class="ri-settings-4-fill"></i> SSH 服务器管理</div>
+            <span class="server-manager-panel-close" onclick="closeServerManager()"><i class="ri-close-line"></i></span>
+        </div>
+        <div class="server-manager-panel-body">
+            <!-- 添加新服务器表单 -->
+            <div style="background: var(--theme-card-bg-light); border: 1px solid var(--theme-border-light); border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem;">
+                <h4 style="color: var(--primary); margin-bottom: 1rem; font-size: 0.95rem;"><i class="ri-add-line"></i> 添加新服务器</h4>
+                <div class="ssh-form-group">
+                    <label class="ssh-form-label">服务器名称</label>
+                    <input type="text" class="ssh-form-input" id="newServerName" placeholder="例如: 飞牛">
+                </div>
+                <div class="ssh-form-group">
+                    <label class="ssh-form-label">服务器地址</label>
+                    <input type="text" class="ssh-form-input" id="newServerHost" placeholder="IP 或域名">
+                </div>
+                <div class="ssh-form-group">
+                    <label class="ssh-form-label">端口</label>
+                    <input type="number" class="ssh-form-input" id="newServerPort" value="22" placeholder="22">
+                </div>
+                <div class="ssh-form-group">
+                    <label class="ssh-form-label">用户名</label>
+                    <input type="text" class="ssh-form-input" id="newServerUsername" placeholder="root">
+                </div>
+                <form class="ssh-form-group" style="position: relative;">
+                    <label class="ssh-form-label">密码（可选）</label>
+                    <input type="password" class="ssh-form-input" id="newServerPassword" placeholder="用户密码" style="padding-right: 2.5rem;">
+                    <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('newServerPassword')" title="显示/隐藏密码" style="position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); background: transparent; border: none; cursor: pointer; padding: 0.3rem;">
+                        <span class="eye-icon" style="font-size: 1rem;"><i class="ri-eye-fill"></i></span>
+                    </button>
+                </form>
+                <button class="btn btn-small btn-success" onclick="addNewServer()" style="width: 100%;">
+                    <i class="ri-checkbox-circle-fill"></i> 添加服务器
+                </button>
+            </div>
+            
+            <!-- 已保存服务器列表 -->
+            <h4 style="color: var(--primary); margin-bottom: 1rem; font-size: 0.95rem;"><i class="ri-clipboard-fill"></i> 已保存的服务器</h4>
+            <div id="serverListContainer">
+                <!-- 动态填充 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 终端外观设置弹窗 -->
+    <div class="modal" id="terminalAppearanceModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3><i class="ri-palette-fill"></i> 终端外观设置</h3>
+                <button class="modal-close-btn" onclick="toggleTerminalAppearanceSettings()"><i class="ri-close-line"></i></button>
+            </div>
+            <div class="modal-body">
+                <!-- 背景设置 -->
+                <div class="ssh-form-group">
+                    <label style="display: block; margin-bottom: 0.5rem; color: var(--text); font-size: 0.9rem;">
+                        <i class="ri-background-fill"></i> 背景设置
+                    </label>
+
+                    <!-- 背景类型切换 -->
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                        <button class="btn btn-small" id="bgColorBtn" onclick="switchBgType('color')" style="flex: 1;">纯色背景</button>
+                        <button class="btn btn-small" id="bgImageBtn" onclick="switchBgType('image')" style="flex: 1;">图片背景</button>
+                    </div>
+
+                    <!-- 纯色背景选择 -->
+                    <div id="bgColorSection">
+                        <div class="color-picker-grid" id="bgColorGrid" style="grid-template-columns: repeat(5, 1fr);">
+                            <!-- 常用颜色选项 - 只保留5种 -->
+                            <div class="color-option" data-color="#000000" onclick="selectTerminalBgColor('#000000')" style="background: #000000;" title="纯黑"></div>
+                            <div class="color-option" data-color="#1a1a1a" onclick="selectTerminalBgColor('#1a1a1a')" style="background: #1a1a1a;" title="深灰"></div>
+                            <div class="color-option" data-color="#0c0c0c" onclick="selectTerminalBgColor('#0c0c0c')" style="background: #0c0c0c;" title="极黑"></div>
+                            <div class="color-option" data-color="#1e1e1e" onclick="selectTerminalBgColor('#1e1e1e')" style="background: #1e1e1e;" title="VS Code黑"></div>
+                            <div class="color-option" data-color="#282a36" onclick="selectTerminalBgColor('#282a36')" style="background: #282a36;" title="Dracula"></div>
+                        </div>
+                        <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <input type="color" id="customBgColor" value="#000000" onchange="selectTerminalBgColor(this.value)" style="width: 50px; height: 30px; border: none; cursor: pointer;">
+                            <span style="color: var(--text-secondary); font-size: 0.85rem;">自定义颜色</span>
+                        </div>
+                    </div>
+
+                    <!-- 图片背景选择 -->
+                    <div id="bgImageSection" style="display: none;">
+                        <!-- 方式1: 上传图片 -->
+                        <div style="margin-bottom: 1rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; color: var(--text); font-size: 0.85rem;">
+                                <i class="ri-upload-2-fill"></i> 上传本地图片
+                            </label>
+                            <input type="file" id="bgImageUpload" accept="image/*" onchange="handleBgImageUpload(event)" style="display: none;">
+                            <button class="btn btn-small" onclick="document.getElementById('bgImageUpload').click()" style="width: 100%;">
+                                <i class="ri-image-add-fill"></i> 选择图片文件
+                            </button>
+                            <div id="uploadFileName" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.3rem;"></div>
+                        </div>
+
+                        <!-- 方式2: 图片链接 -->
+                        <div style="margin-bottom: 0.5rem;">
+                            <label style="display: block; margin-bottom: 0.5rem; color: var(--text); font-size: 0.85rem;">
+                                <i class="ri-link-fill"></i> 使用图片链接
+                            </label>
+                            <input type="text" class="ssh-form-input" id="bgImageUrl" placeholder="输入图片URL (例如: https://example.com/bg.jpg)">
+                        </div>
+
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <button class="btn btn-small btn-success" onclick="applyBgImage()" style="flex: 1;">应用设置</button>
+                            <button class="btn btn-small btn-danger" onclick="clearBgImage()" style="flex: 1;">清除图片</button>
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
+                            <i class="ri-lightbulb-flash-fill"></i> 提示：建议使用深色背景图片，支持jpg、png、gif格式。图片会自动缩放铺满。上传的图片会保存在浏览器本地存储中。
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 字体颜色选择 -->
+                <div class="ssh-form-group" style="margin-top: 1.5rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; color: var(--text); font-size: 0.9rem;">
+                        <i class="ri-font-color"></i> 字体颜色
+                    </label>
+                    <div class="color-picker-grid" id="textColorGrid" style="grid-template-columns: repeat(5, 1fr);">
+                        <!-- 常用颜色选项 - 只保留5种 -->
+                        <div class="color-option" data-color="#ffffff" onclick="selectTerminalTextColor('#ffffff')" style="background: #ffffff;" title="纯白"></div>
+                        <div class="color-option" data-color="#f0f0f0" onclick="selectTerminalTextColor('#f0f0f0')" style="background: #f0f0f0;" title="浅灰白"></div>
+                        <div class="color-option" data-color="#e0e0e0" onclick="selectTerminalTextColor('#e0e0e0')" style="background: #e0e0e0;" title="灰白"></div>
+                        <div class="color-option" data-color="#00ff00" onclick="selectTerminalTextColor('#00ff00')" style="background: #00ff00;" title="终端绿"></div>
+                        <div class="color-option" data-color="#4af626" onclick="selectTerminalTextColor('#4af626')" style="background: #4af626;" title="黑客绿"></div>
+                    </div>
+                    <div style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <input type="color" id="customTextColor" value="#ffffff" onchange="selectTerminalTextColor(this.value)" style="width: 50px; height: 30px; border: none; cursor: pointer;">
+                        <span style="color: var(--text-secondary); font-size: 0.85rem;">自定义颜色</span>
+                    </div>
+                </div>
+
+                <!-- 预览 -->
+                <div style="margin-top: 1.5rem; padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+                    <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                        <i class="ri-eye-fill"></i> 效果预览
+                    </div>
+                    <div id="terminalPreview" style="padding: 1rem; border-radius: 4px; font-family: monospace; font-size: 0.9rem;">
+                        <span style="color: #00ff00;">user@server</span>:<span style="color: #0088ff;">~</span>$ ssh连接成功
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-small" onclick="toggleTerminalAppearanceSettings()">取消</button>
+                <button class="btn btn-small btn-success" onclick="saveTerminalAppearance()"><i class="ri-save-3-fill"></i> 保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/lib/socket.io.min.js?v=latest-2603271513"></script>
+    <script src="/static/lib/particles.min.js?v=latest-2603271513"></script>
+    <link rel="stylesheet" href="/static/lib/xterm.min.css?v=latest-2603271513">
+    <script src="/static/lib/xterm.min.js?v=latest-2603271513"></script>
+    <script src="/static/lib/xterm-addon-fit.min.js?v=latest-2603271513"></script>
+    <!-- CodeMirror 5 编辑器 -->
+    <link rel="stylesheet" href="/static/lib/codemirror5/lib/codemirror.css">
+    <link rel="stylesheet" href="/static/lib/codemirror5/theme/monokai.css">
+    <link rel="stylesheet" href="/static/lib/codemirror5/codemirror-custom.css">
+    <script src="/static/lib/codemirror5/lib/codemirror.js"></script>
+    <script src="/static/lib/codemirror5/mode/yaml/yaml.js"></script>
+    <script src="/static/lib/codemirror5/mode/javascript/javascript.js"></script>
+    <script src="/static/lib/codemirror5/mode/xml/xml.js"></script>
+    <script src="/static/lib/codemirror5/mode/css/css.js"></script>
+    <script src="/static/lib/codemirror5/mode/htmlmixed/htmlmixed.js"></script>
+    <script src="/static/lib/codemirror5/mode/toml/toml.js"></script>
+    <script src="/static/lib/codemirror5-wrapper.js"></script>
+    <script src="/static/lib/codemirror5-chinese.js"></script>
+    <script src="/static/js/app.min.js?v=latest-2603271513"></script>
+    <script src="/static/js/ssh-sftp.min.js?v=latest-2603271513"></script>
+    <script>
+        // 移动端检测
+        function isMobileDevice() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+            const isSmallScreen = window.innerWidth <= 768;
+            return mobileRegex.test(userAgent) || isSmallScreen;
+        }
+        
+        // 检查是否为移动设备
+        if (isMobileDevice()) {
+            document.getElementById('mobileWarning').style.display = 'block';
+            document.getElementById('sshPanel').style.display = 'none';
+            document.querySelector('.navbar').style.display = 'none';
+        }
+
+        // SSH 页面自动初始化
+        document.addEventListener('DOMContentLoaded', async function() {
+            // 如果是移动设备，不初始化SSH
+            if (isMobileDevice()) {
+                return;
+            }
+            
+            // 初始化系统（加载配置等）
+            await initializeSystem();
+            
+            // 自动初始化 SSH 终端
+            if (!appState.sshTerminal) {
+                initSSHTerminal();
+            }
+            
+            // 加载已保存的服务器列表
+            await loadSavedServers();
+            
+            // <i class="ri-checkbox-circle-fill"></i> 加载自定义命令列表
+            await loadCustomCommands();
+            
+            // 显示使用文档（如果需要）
+            showSSHHelpIfNeeded();
+        });
+        
+        // <i class="ri-checkbox-circle-fill"></i> 页面刷新/关闭时自动断开SSH和SFTP连接
+        window.addEventListener('beforeunload', function(e) {
+            if (appState.sshConnected && appState.sshSessionId) {
+                // 使用sendBeacon确保请求能发送出去
+                const data = JSON.stringify({ session_id: appState.sshSessionId });
+                const blob = new Blob([data], { type: 'application/json' });
+                navigator.sendBeacon('/api/ssh/disconnect', blob);
+            }
+        });
+        
+        // <i class="ri-checkbox-circle-fill"></i> 监听登出按钮点击事件
+        const logoutBtn = document.querySelector('button[onclick="logout()"]');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', function(e) {
+                if (appState.sshConnected && appState.sshSessionId) {
+                    // 登出前断开SSH
+                    const data = JSON.stringify({ session_id: appState.sshSessionId });
+                    const blob = new Blob([data], { type: 'application/json' });
+                    navigator.sendBeacon('/api/ssh/disconnect', blob);
+                }
+            });
+        }
+        
+        // <i class="ri-checkbox-circle-fill"></i> 监听返回主页按钮点击事件
+        const homeBtn = document.querySelector('a[href="/"]');
+        if (homeBtn) {
+            homeBtn.addEventListener('click', function(e) {
+                if (appState.sshConnected && appState.sshSessionId) {
+                    // 返回主页前断开SSH
+                    const data = JSON.stringify({ session_id: appState.sshSessionId });
+                    const blob = new Blob([data], { type: 'application/json' });
+                    navigator.sendBeacon('/api/ssh/disconnect', blob);
+                }
+            });
+        }
+
+        // ==================== 密码显示/隐藏功能 ====================
+        function togglePasswordVisibility(inputId) {
+            const input = document.getElementById(inputId);
+            const button = input.parentElement.querySelector('.password-toggle-btn');
+            const eyeIcon = button.querySelector('.eye-icon');
+
+            if (input.type === 'password') {
+                // 显示密码
+                input.type = 'text';
+                eyeIcon.innerHTML = '<i class="ri-eye-off-line"></i>';  // 闭眼图标
+                button.title = '隐藏密码';
+            } else {
+                // 隐藏密码
+                input.type = 'password';
+                eyeIcon.innerHTML = '<i class="ri-eye-fill"></i>';  // 眼睛图标
+                button.title = '显示密码';
+            }
+
+            // 保持输入框焦点
+            input.focus();
+        }
+
+        // ==================== 终端外观设置功能 ====================
+        let terminalAppearance = {
+            bgColor: '#000000',
+            textColor: '#ffffff',
+            bgImage: '',
+            bgType: 'color' // 'color' 或 'image'
+        };
+
+        // 切换背景类型
+        function switchBgType(type) {
+            terminalAppearance.bgType = type;
+            const colorSection = document.getElementById('bgColorSection');
+            const imageSection = document.getElementById('bgImageSection');
+            const colorBtn = document.getElementById('bgColorBtn');
+            const imageBtn = document.getElementById('bgImageBtn');
+
+            if (type === 'color') {
+                colorSection.style.display = 'block';
+                imageSection.style.display = 'none';
+                colorBtn.classList.add('btn-primary');
+                imageBtn.classList.remove('btn-primary');
+            } else {
+                colorSection.style.display = 'none';
+                imageSection.style.display = 'block';
+                colorBtn.classList.remove('btn-primary');
+                imageBtn.classList.add('btn-primary');
+            }
+        }
+
+        // 加载保存的终端外观设置
+        function loadTerminalAppearance() {
+            const saved = localStorage.getItem('ssh_terminal_appearance');
+            if (saved) {
+                try {
+                    terminalAppearance = JSON.parse(saved);
+                    applyTerminalAppearance();
+                } catch (e) {
+                    console.error('加载终端外观设置失败:', e);
+                }
+            }
+        }
+
+        // 应用终端外观
+        function applyTerminalAppearance() {
+            const container = document.querySelector('.ssh-terminal-container');
+            if (container) {
+                if (terminalAppearance.bgType === 'image' && terminalAppearance.bgImage) {
+                    // 使用图片背景 - 拉伸填充整个页面
+                    container.style.background = `url(${terminalAppearance.bgImage}) center center / 100% 100% no-repeat`;
+                    container.style.backgroundColor = terminalAppearance.bgColor; // 回退颜色
+                } else {
+                    // 使用纯色背景
+                    container.style.background = terminalAppearance.bgColor;
+                    container.style.backgroundImage = 'none';
+                }
+            }
+
+            // 更新xterm终端颜色
+            if (appState.sshTerminal) {
+                // 使用透明背景,让容器的背景显示出来
+                appState.sshTerminal.options.theme = {
+                    background: 'transparent',
+                    foreground: terminalAppearance.textColor,
+                    cursor: terminalAppearance.textColor,
+                    black: terminalAppearance.textColor,
+                    red: '#cd3131',
+                    green: '#0dbc79',
+                    yellow: '#e5e510',
+                    blue: '#2472c8',
+                    magenta: '#bc3fbc',
+                    cyan: '#11a8cd',
+                    white: '#e5e5e5',
+                    brightBlack: '#666666',
+                    brightRed: '#f14c4c',
+                    brightGreen: '#23d18b',
+                    brightYellow: '#f5f543',
+                    brightBlue: '#3b8eea',
+                    brightMagenta: '#d670d6',
+                    brightCyan: '#29b8db',
+                    brightWhite: '#ffffff'
+                };
+            }
+        }
+
+        // 处理图片上传
+        async function handleBgImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // 检查文件大小 (限制5MB)
+            if (file.size > 5 * 1024 * 1024) {
+                showNotification('图片文件过大,请选择小于5MB的图片', 'error');
+                return;
+            }
+
+            // 显示文件名
+            document.getElementById('uploadFileName').textContent = `上传中: ${file.name}`;
+
+            try {
+                // 创建FormData上传到服务器
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch('/api/ssh/background/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    // 保存服务器返回的图片URL
+                    terminalAppearance.bgImage = result.url;
+                    terminalAppearance.bgType = 'image';
+                    document.getElementById('bgImageUrl').value = '[上传的图片]';
+                    document.getElementById('uploadFileName').textContent = `已上传: ${file.name}`;
+                    updatePreview();
+                    showNotification('图片上传成功,请点击"应用设置"保存', 'success');
+                } else {
+                    throw new Error(result.message || '上传失败');
+                }
+            } catch (error) {
+                console.error('图片上传失败:', error);
+                showNotification('图片上传失败: ' + error.message, 'error');
+                document.getElementById('uploadFileName').textContent = '';
+            }
+        }
+
+        // 应用图片背景
+        function applyBgImage() {
+            const urlInput = document.getElementById('bgImageUrl').value.trim();
+
+            // 如果有上传的图片,使用上传的图片
+            if (terminalAppearance.bgImage && (terminalAppearance.bgImage.startsWith('/config/ssh_backgrounds/') || terminalAppearance.bgImage.startsWith('http'))) {
+                terminalAppearance.bgType = 'image';
+                updatePreview();
+                showNotification('图片背景已应用', 'success');
+                return;
+            }
+
+            // 否则使用URL
+            if (urlInput && urlInput !== '[上传的图片]') {
+                terminalAppearance.bgImage = urlInput;
+                terminalAppearance.bgType = 'image';
+                updatePreview();
+                showNotification('图片链接已应用', 'success');
+            } else if (terminalAppearance.bgImage) {
+                terminalAppearance.bgType = 'image';
+                updatePreview();
+                showNotification('图片背景已应用', 'success');
+            } else {
+                showNotification('请先上传图片或输入图片链接', 'warning');
+            }
+        }
+
+        // 清除图片背景
+        function clearBgImage() {
+            terminalAppearance.bgImage = '';
+            terminalAppearance.bgType = 'color';
+            document.getElementById('bgImageUrl').value = '';
+            document.getElementById('bgImageUpload').value = '';
+            document.getElementById('uploadFileName').textContent = '';
+            switchBgType('color');
+            updatePreview();
+            showNotification('图片背景已清除', 'success');
+        }
+
+        // 打开/关闭终端外观设置
+        function toggleTerminalAppearanceSettings() {
+            const modal = document.getElementById('terminalAppearanceModal');
+            if (modal.classList.contains('show')) {
+                modal.classList.remove('show');
+            } else {
+                modal.classList.add('show');
+                loadTerminalAppearance();
+                updateAppearanceUI();
+                updatePreview();
+            }
+        }
+
+        // 更新外观���置UI
+        function updateAppearanceUI() {
+            // 切换背景类型
+            switchBgType(terminalAppearance.bgType || 'color');
+
+            // 更新背景颜色选择
+            document.querySelectorAll('#bgColorGrid .color-option').forEach(option => {
+                option.classList.remove('selected');
+                if (option.dataset.color === terminalAppearance.bgColor) {
+                    option.classList.add('selected');
+                }
+            });
+            document.getElementById('customBgColor').value = terminalAppearance.bgColor;
+
+            // 如果是图片背景,填充URL或显示上传状态
+            if (terminalAppearance.bgType === 'image' && terminalAppearance.bgImage) {
+                if (terminalAppearance.bgImage.startsWith('data:')) {
+                    document.getElementById('bgImageUrl').value = '[上传的图片]';
+                    document.getElementById('uploadFileName').textContent = '已保存的上传图片';
+                } else {
+                    document.getElementById('bgImageUrl').value = terminalAppearance.bgImage;
+                    document.getElementById('uploadFileName').textContent = '';
+                }
+            } else {
+                document.getElementById('uploadFileName').textContent = '';
+            }
+
+            // 更新字体颜色选择
+            document.querySelectorAll('#textColorGrid .color-option').forEach(option => {
+                option.classList.remove('selected');
+                if (option.dataset.color === terminalAppearance.textColor) {
+                    option.classList.add('selected');
+                }
+            });
+            document.getElementById('customTextColor').value = terminalAppearance.textColor;
+        }
+
+        // 选择背景颜色
+        function selectTerminalBgColor(color) {
+            terminalAppearance.bgColor = color;
+            updateAppearanceUI();
+            updatePreview();
+        }
+
+        // 选择字体颜色
+        function selectTerminalTextColor(color) {
+            terminalAppearance.textColor = color;
+            updateAppearanceUI();
+            updatePreview();
+        }
+
+        // 更新预览
+        function updatePreview() {
+            const preview = document.getElementById('terminalPreview');
+            if (preview) {
+                // 根据背景类型设置预览
+                if (terminalAppearance.bgType === 'image' && terminalAppearance.bgImage) {
+                    preview.style.background = `url(${terminalAppearance.bgImage}) center center / 100% 100% no-repeat`;
+                    preview.style.backgroundColor = terminalAppearance.bgColor;
+                } else {
+                    preview.style.background = terminalAppearance.bgColor;
+                    preview.style.backgroundImage = 'none';
+                }
+                preview.style.color = terminalAppearance.textColor;
+            }
+        }
+
+        // 保存终端外观设置
+        function saveTerminalAppearance() {
+            localStorage.setItem('ssh_terminal_appearance', JSON.stringify(terminalAppearance));
+            applyTerminalAppearance();
+            toggleTerminalAppearanceSettings();
+            showNotification('终端外观已保存', 'success');
+        }
+
+        // 页面加载时应用外观设置
+        document.addEventListener('DOMContentLoaded', function() {
+            loadTerminalAppearance();
+        });
+    </script>
+</body>
+</html>

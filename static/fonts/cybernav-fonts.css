@@ -1,0 +1,118 @@
+/* PingFang SC - 苹方简体中文字体 */
+
+/* 苹方-简 极细体 (100) */
+@font-face {
+    font-family: 'PingFang SC';
+    font-style: normal;
+    font-weight: 100;
+    font-display: swap;
+    src: local('PingFang SC Ultralight'),
+         local('PingFangSC-Ultralight'),
+         url('/static/fonts/PingFangSC-Ultralight.woff2') format('woff2');
+}
+
+/* 苹方-简 纤细体 (200) */
+@font-face {
+    font-family: 'PingFang SC';
+    font-style: normal;
+    font-weight: 200;
+    font-display: swap;
+    src: local('PingFang SC Thin'),
+         local('PingFangSC-Thin'),
+         url('/static/fonts/PingFangSC-Thin.woff2') format('woff2');
+}
+
+/* 苹方-简 细体 (300) */
+@font-face {
+    font-family: 'PingFang SC';
+    font-style: normal;
+    font-weight: 300;
+    font-display: swap;
+    src: local('PingFang SC Light'),
+         local('PingFangSC-Light'),
+         url('/static/fonts/PingFangSC-Light.woff2') format('woff2');
+}
+
+/* 苹方-简 常规体 (400) */
+@font-face {
+    font-family: 'PingFang SC';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: local('PingFang SC Regular'),
+         local('PingFangSC-Regular'),
+         local('PingFang SC'),
+         url('/static/fonts/PingFangSC-Regular.woff2') format('woff2');
+}
+
+/* 苹方-简 中黑体 (500) */
+@font-face {
+    font-family: 'PingFang SC';
+    font-style: normal;
+    font-weight: 500;
+    font-display: swap;
+    src: local('PingFang SC Medium'),
+         local('PingFangSC-Medium'),
+         url('/static/fonts/PingFangSC-Medium.woff2') format('woff2');
+}
+
+/* 苹方-简 中粗体 (600) */
+@font-face {
+    font-family: 'PingFang SC';
+    font-style: normal;
+    font-weight: 600;
+    font-display: swap;
+    src: local('PingFang SC Semibold'),
+         local('PingFangSC-Semibold'),
+         url('/static/fonts/PingFangSC-Semibold.woff2') format('woff2');
+}
+
+/* 苹方-简 粗体 (700) - 使用 Semibold 作为 Bold */
+@font-face {
+    font-family: 'PingFang SC';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: local('PingFang SC Semibold'),
+         local('PingFangSC-Semibold'),
+         url('/static/fonts/PingFangSC-Semibold.woff2') format('woff2');
+}
+
+/* 苹方-简 特粗体 (800) - 使用 Semibold */
+@font-face {
+    font-family: 'PingFang SC';
+    font-style: normal;
+    font-weight: 800;
+    font-display: swap;
+    src: local('PingFang SC Semibold'),
+         local('PingFangSC-Semibold'),
+         url('/static/fonts/PingFangSC-Semibold.woff2') format('woff2');
+}
+
+/* 苹方-简 黑体 (900) - 使用 Semibold */
+@font-face {
+    font-family: 'PingFang SC';
+    font-style: normal;
+    font-weight: 900;
+    font-display: swap;
+    src: local('PingFang SC Semibold'),
+         local('PingFangSC-Semibold'),
+         url('/static/fonts/PingFangSC-Semibold.woff2') format('woff2');
+}
+
+/* Orbitron - 科技感数字字体 */
+@font-face {
+    font-family: 'Orbitron';
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src: url('/static/fonts/orbitron-regular.woff2') format('woff2');
+}
+
+@font-face {
+    font-family: 'Orbitron';
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url('/static/fonts/orbitron-bold.woff2') format('woff2');
+}
