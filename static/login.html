@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>登录 · Docker Control</title>
+<link rel="icon" href="data:," />
 <link rel="stylesheet" href="/static/css/style.css" />
 <script>try { var t = localStorage.getItem('dc-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) { }</script>
 </head>
@@ -54,6 +55,7 @@ document.getElementById('loginForm').addEventListener('submit', function (e) {
   btn.disabled = true;
   api.post('/api/auth/login', { password: pw }).then(function (s) {
     if (s && s.success) {
+      try { localStorage.setItem('dc-token', s.token || ''); } catch (e) { }
       location.href = '/';
     } else {
       document.getElementById('footTip').textContent = (s && s.message) || '登录失败';
