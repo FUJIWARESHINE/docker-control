@@ -1,0 +1,21 @@
+# Docker Control v1.0 — 全新重构版
+# 部署：把本文件传到服务器，docker compose up -d，访问 http://<IP>:9527
+services:
+  docker-control:
+    image: ghcr.io/fujiwareshine/docker-control:v1.0   # 固定版本 tag（避免 NAS 缓存旧镜像）
+    container_name: docker-control
+    restart: unless-stopped
+    network_mode: host              # host 网络：端口页完整功能（/proc/net 扫描宿主机全端口）
+    # ports:                        # ← 如改回 bridge 网络则取消注释，同时注释上一行
+    #   - "9527:9527"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # 必需：Docker Engine API
+      - ./data:/app/data             # 密码/配置/模板/定时任务持久化
+    environment:
+      - TZ=Asia/Shanghai
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    labels:
+      - docker-control.self=true    # 自保护标记：面板自身容器从容器列表剔除（防误操作）

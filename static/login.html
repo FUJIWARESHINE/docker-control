@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>登录 · Docker Control</title>
+<link rel="stylesheet" href="/static/css/style.css" />
+<script>try { var t = localStorage.getItem('dc-theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) { }</script>
+</head>
+<body>
+<svg style="display:none" aria-hidden="true">
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.4-3.2 8.4-8 9.5C7.2 20.4 4 16.4 4 12V6z"/><path d="M9 12l2 2 4-4.5"/></symbol>
+</svg>
+
+<div class="login-wrap">
+  <form class="login-card" id="loginForm">
+    <div class="logo">DC</div>
+    <h1>Docker Control</h1>
+    <p class="sub" id="verText">轻量 Docker 管理面板</p>
+    <div class="field">
+      <label for="pw">管理密码</label>
+      <input type="password" id="pw" autocomplete="current-password" autofocus placeholder="默认密码 admin" />
+    </div>
+    <button type="submit" class="btn primary" id="btnLogin">
+      <svg style="width:15px;height:15px"><use href="#i-shield"/></svg><span>登 录</span>
+    </button>
+    <p class="login-foot" id="footTip"></p>
+  </form>
+</div>
+
+<script>
+var api = {
+  get: function (u) { return fetch(u).then(function (r) { return r.json(); }); },
+  post: function (u, body) {
+    return fetch(u, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    }).then(function (r) { return r.json(); });
+  }
+};
+api.get('/api/auth/status').then(function (s) {
+  if (s && s.success) {
+    document.getElementById('verText').textContent = '轻量 Docker 管理面板 · v' + s.version;
+    if (s.using_default_password) {
+      document.getElementById('footTip').textContent = '当前为默认密码，登录后请在系统设置中修改';
+    }
+  }
+});
+document.getElementById('loginForm').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var pw = document.getElementById('pw').value;
+  var btn = document.getElementById('btnLogin');
+  btn.disabled = true;
+  api.post('/api/auth/login', { password: pw }).then(function (s) {
+    if (s && s.success) {
+      location.href = '/';
+    } else {
+      document.getElementById('footTip').textContent = (s && s.message) || '登录失败';
+      btn.disabled = false;
+    }
+  }).catch(function () {
+    document.getElementById('footTip').textContent = '网络错误';
+    btn.disabled = false;
+  });
+});
+</script>
+</body>
+</html>
