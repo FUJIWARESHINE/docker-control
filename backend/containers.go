@@ -113,11 +113,40 @@ func (a *App) handleContainersList(w http.ResponseWriter, r *http.Request) {
 
 // ---------- 操作 / 删除 ----------
 
+// isSelf 判断目标容器是否为面板自身。
+// 自保护必须同时覆盖「列表」与「操作」两层：
+// 列表层剔除只是让前端看不见，直接调 API 仍可命中，故操作层必须再拦一次。
+// name 可能是容器名或 ID；只要任一命中自身容器即判定为 self。
+func (a *App) isSelf(nameOrID string) bool {
+	if nameOrID == "" {
+		return false
+	}
+	cs, err := a.Docker.ListContainers(true)
+	if err != nil {
+		return false
+	}
+	for _, c := range cs {
+		if c.Labels["docker-control.self"] == "true" || containerName(c) == a.SelfName {
+			n := containerName(c)
+			if n == nameOrID || strings.HasPrefix(c.ID, nameOrID) || nameOrID == a.SelfName || nameOrID == n {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (a *App) containerAction(w http.ResponseWriter, r *http.Request, id, action string) {
 	m := readBody(r)
 	name := bodyStr(m, "container_name")
 	if name == "" {
 		name = id
+	}
+	// 自保护：禁止对面板自身执行任何生命周期操作，否则面板会把自己干掉
+	if a.isSelf(name) || a.isSelf(id) {
+		a.Logs.Add("WARNING", fmt.Sprintf("已拦截对面板自身容器的 %s 操作 [%s]", action, name), "realtime")
+		fail(w, 403, "自保护：禁止操作 docker-control 面板自身容器")
+		return
 	}
 	if err := a.Docker.ContainerAction(name, action, 10); err != nil {
 		fail(w, 500, action+" 失败: "+err.Error())
@@ -135,6 +164,12 @@ func (a *App) containerDelete(w http.ResponseWriter, r *http.Request, id string)
 	name := bodyStr(m, "container_name")
 	if name == "" {
 		name = id
+	}
+	// 自保护：禁止删除面板自身容器
+	if a.isSelf(name) || a.isSelf(id) {
+		a.Logs.Add("WARNING", "已拦截对面板自身容器的删除操作 ["+name+"]", "realtime")
+		fail(w, 403, "自保护：禁止删除 docker-control 面板自身容器")
+		return
 	}
 	delImage := bodyBool(m, "delete_image")
 	var imgID string

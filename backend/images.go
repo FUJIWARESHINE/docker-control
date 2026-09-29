@@ -137,6 +137,27 @@ func (a *App) handleImagePull(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) pullImageStream(image, tag string) {
+	// 广播本次拉取的「网络路径」：让用户明确知道走的是直连还是代理。
+	// dockerd 负责真正的拉取，面板只是发起方——代理是否生效取决于 dockerd 的环境变量。
+	cfg := a.readProxyConfig()
+	viaProxy := cfg.Enabled && (cfg.HTTP != "" || cfg.HTTPS != "")
+	pathMsg := "网络路径：宿主机 dockerd 直连（未配置代理）"
+	if viaProxy {
+		entry := cfg.HTTPS
+		if entry == "" {
+			entry = cfg.HTTP
+		}
+		pathMsg = "网络路径：宿主机 dockerd → 代理 " + entry
+	}
+	a.Hub.Broadcast("update_progress", map[string]any{
+		"container": image, "message": "开始拉取 " + image + ":" + tag,
+		"status": "start", "percentage": 0, "via_proxy": viaProxy,
+	})
+	a.Hub.Broadcast("update_progress", map[string]any{
+		"container": image, "message": pathMsg,
+		"status": "info", "percentage": 0, "via_proxy": viaProxy,
+	})
+
 	resp, err := a.Docker.doRaw("POST", "/images/create", url.Values{"fromImage": {image}, "tag": {tag}})
 	if err != nil {
 		a.Hub.Broadcast("update_progress", map[string]any{"container": image, "message": "拉取失败: " + err.Error(), "status": "error", "percentage": 0})

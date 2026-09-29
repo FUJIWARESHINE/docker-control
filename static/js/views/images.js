@@ -3,6 +3,8 @@
   'use strict';
 
   window.Views = window.Views || {};
+  // 拉取进度订阅句柄（供 unmount 解绑）
+  let imPullHandler = null;
   Views.images = {
     title: '镜像管理',
     async mount(content) {
@@ -20,13 +22,50 @@
             <table class="tbl"><thead><tr>
               <th>镜像标签</th><th>ID</th><th>大小</th><th>创建时间</th><th>使用状态</th><th style="text-align:right">操作</th>
             </tr></thead><tbody id="imRows"></tbody></table>
-          </div></div>
+          </div>
+          <div class="card" id="imPullLog" hidden style="margin-top:12px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <b style="font-size:13px">拉取流程</b>
+              <span class="pill" id="imPullPath"></span>
+              <div class="spacer" style="flex:1"></div>
+              <button type="button" class="btn sm" id="imPullCopy">复制日志</button>
+            </div>
+            <pre id="imPullBody" class="mono" style="margin:0;max-height:260px;overflow:auto;font-size:11px;line-height:1.6;white-space:pre-wrap"></pre>
+          </div>
         </div>`;
 
       const rows = content.querySelector('#imRows');
       const search = content.querySelector('#imSearch');
       let list = [];
       search.addEventListener('input', UI.debounce(render, 200));
+
+      // ---- 拉取流程可视化：订阅 WS 进度 ----
+      const pullLog = content.querySelector('#imPullLog');
+      const pullBody = content.querySelector('#imPullBody');
+      const pullPath = content.querySelector('#imPullPath');
+      let pullLines = [];
+      const pullHandler = (p) => {        // 只处理镜像拉取事件（以镜像名为 container 字段）
+        const name = p.container || '';
+        if (!name || p.status === 'success' && /更新|update/i.test(p.message || '')) return;
+        pullLog.hidden = false;
+        if (typeof p.via_proxy === 'boolean') {
+          pullPath.textContent = p.via_proxy ? '经代理拉取' : '宿主机直连拉取';
+          pullPath.className = 'pill ' + (p.via_proxy ? 'warn' : 'ok');
+        }
+        const t = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+        pullLines.push(`[${t}] ${p.message || p.status || ''}`);
+        if (pullLines.length > 400) pullLines = pullLines.slice(-400);
+        pullBody.textContent = pullLines.join('\n');
+        pullBody.scrollTop = pullBody.scrollHeight;
+      };
+      WS.on('update_progress', pullHandler);
+      imPullHandler = pullHandler;
+
+      content.querySelector('#imPullCopy').addEventListener('click', () => {
+        navigator.clipboard.writeText(pullLines.join('\n')).then(
+          () => UI.toast('拉取日志已复制', 'ok'),
+          () => UI.toast('复制失败', 'error'));
+      });
 
       async function load() {
         try {
@@ -131,6 +170,9 @@
       });
 
       await load();
+    },
+    unmount() {
+      if (imPullHandler) { WS.off('update_progress', imPullHandler); imPullHandler = null; }
     },
   };
 })();

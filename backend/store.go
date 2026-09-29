@@ -34,7 +34,6 @@ type StoreData struct {
 	Aliases             map[string]any    `json:"aliases"`
 	UserPrefs           map[string]any    `json:"user_prefs"`
 	APIKeys             []APIKey          `json:"api_keys"`
-	Templates           []map[string]any  `json:"templates"`
 	Tasks               []Task            `json:"tasks"`
 	AutoUpdate          map[string]bool   `json:"auto_update_containers"`
 	UpdateIntervalDays  int               `json:"update_interval_days"`

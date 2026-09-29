@@ -1,3 +1,6 @@
 data/
 *.exe
 *.log
+
+# 本地开发/验证目录（不提交）
+.workbuddy/

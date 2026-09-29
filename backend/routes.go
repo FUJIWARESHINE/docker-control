@@ -47,9 +47,7 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/updates/settings", app.guard(app.handleUpdateSettings))
 	mux.HandleFunc("/api/updates/", app.guard(app.handleUpdateSub)) // {name}/apply | {name}/auto
 
-	// 模板 / 定时任务
-	mux.HandleFunc("/api/templates", app.guard(app.handleTemplates))
-	mux.HandleFunc("/api/templates/", app.guard(app.handleTemplateSub))
+	// 定时任务
 	mux.HandleFunc("/api/tasks", app.guard(app.handleTasks))
 	mux.HandleFunc("/api/tasks/", app.guard(app.handleTaskSub)) // {id}/execute
 
@@ -59,6 +57,13 @@ func registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/prefs", app.guard(app.handlePrefs))
 	mux.HandleFunc("/api/apikeys", app.guard(app.handleAPIKeys))
 	mux.HandleFunc("/api/apikeys/", app.guard(app.handleAPIKeySub)) // {id}/toggle
+
+	// 镜像拉取代理
+	mux.HandleFunc("/api/proxy", app.guard(app.handleProxy))
+
+	// Telegram 机器人
+	mux.HandleFunc("/api/telegram", app.guard(app.handleTelegram))
+	mux.HandleFunc("/api/telegram/test", app.guard(app.handleTelegramTest))
 
 	// 日志 / 系统 / 备份
 	mux.HandleFunc("/api/logs", app.guard(app.handleLogs))
@@ -227,16 +232,7 @@ func (a *App) handleUpdateSub(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// ---------- 模板 / 任务子路由 ----------
-
-func (a *App) handleTemplateSub(w http.ResponseWriter, r *http.Request) {
-	name := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/templates/"), "/")
-	if r.Method == http.MethodDelete {
-		a.templateDelete(w, r, name)
-		return
-	}
-	a.templateGet(w, r, name)
-}
+// ---------- 任务子路由 ----------
 
 func (a *App) handleTaskSub(w http.ResponseWriter, r *http.Request) {
 	tail := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/tasks/"), "/")

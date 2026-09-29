@@ -4,16 +4,32 @@ services:
   docker-control:
     image: ghcr.io/fujiwareshine/docker-control:v1.0   # 固定版本 tag（避免 NAS 缓存旧镜像）
     container_name: docker-control
-    restart: unless-stopped
+    restart: always
     network_mode: host              # host 网络：端口页完整功能（/proc/net 扫描宿主机全端口）
     # ports:                        # ← 如改回 bridge 网络则取消注释，同时注释上一行
     #   - "9527:9527"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock   # 必需：Docker Engine API
-      - ./data:/app/data             # 密码/配置/模板/定时任务持久化
+      - ./data:/app/data             # 密码/配置/定时任务持久化
+      - /:/host:rw                   # Compose 文件读写：宿主机根目录映射到容器内 /host
     environment:
       - TZ=Asia/Shanghai
+      - HOST_ROOT=/host              # Compose 路径映射前缀（对应上面挂载点）
     security_opt:
       - no-new-privileges:true
     labels:
       - docker-control.self=true    # 自保护标记：面板自身容器从容器列表剔除（防误操作）
+# ============================================================================
+# 关于 /:/host:rw 挂载的说明
+#
+# 用途：Compose 项目的「编辑」功能需要读写宿主机上的 docker-compose.yml 文件。
+#       面板跑在容器里，不挂载的话 os.ReadFile(宿主机路径) 会直接 ENOENT。
+#
+# 风险：容器内可读写宿主机全部文件。本镜像以 root 运行，且宿主目录默认可写，
+#       请确保面板本身有强密码保护，不要直接暴露到公网。
+#
+# 如果不需要 Compose 编辑功能，把这一行删掉即可，其余功能不受影响。
+# 如需更小的权限面，可改为只挂 compose 文件所在目录：
+#       - /path/to/compose/dir:/host/path/to/compose/dir:rw
+#   并保持 HOST_ROOT=/host
+# ============================================================================

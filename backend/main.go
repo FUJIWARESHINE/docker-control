@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 const Version = "1.0.0"
@@ -23,6 +24,10 @@ type App struct {
 	Logs     *LogRing
 	Tasks    *TaskManager
 	SelfName string // 自身容器名（自保护）
+
+	// Telegram 机器人运行状态
+	tgMu    sync.Mutex
+	tgState string
 }
 
 var app *App
@@ -47,6 +52,14 @@ func main() {
 	a.Logs.Add("INFO", "Docker Control v"+Version+" 已启动", "system")
 
 	go autoUpdateLoop()
+	a.StartTelegramBot()
+	go a.containerWatchLoop()
+
+	// 探测宿主机执行镜像（用于代理生效、dockerd 重启等特权代执行）
+	go func() {
+		img := resolveExecImage()
+		a.Logs.Add("INFO", "宿主机执行镜像: "+img, "system")
+	}()
 
 	mux := http.NewServeMux()
 	registerRoutes(mux)

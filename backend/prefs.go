@@ -106,68 +106,6 @@ func (a *App) apikeyDelete(w http.ResponseWriter, r *http.Request, id string) {
 	ok(w, nil)
 }
 
-// ---------- 模板 ----------
-
-// handleTemplates GET/POST /api/templates
-func (a *App) handleTemplates(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		a.Store.mu.RLock()
-		defer a.Store.mu.RUnlock()
-		if a.Store.Data.Templates == nil {
-			ok(w, []any{})
-			return
-		}
-		ok(w, a.Store.Data.Templates)
-		return
-	}
-	m := readBody(r)
-	name := bodyStr(m, "name")
-	if name == "" {
-		fail(w, 400, "缺少模板名称")
-		return
-	}
-	a.Store.mu.Lock()
-	replaced := false
-	for i := range a.Store.Data.Templates {
-		if tn, _ := a.Store.Data.Templates[i]["name"].(string); tn == name {
-			a.Store.Data.Templates[i] = m
-			replaced = true
-		}
-	}
-	if !replaced {
-		a.Store.Data.Templates = append(a.Store.Data.Templates, m)
-	}
-	a.Store.mu.Unlock()
-	a.Store.Save()
-	writeJSON(w, 200, map[string]any{"success": true, "message": "模板已保存"})
-}
-
-func (a *App) templateGet(w http.ResponseWriter, r *http.Request, name string) {
-	a.Store.mu.RLock()
-	defer a.Store.mu.RUnlock()
-	for _, t := range a.Store.Data.Templates {
-		if tn, _ := t["name"].(string); tn == name {
-			ok(w, t)
-			return
-		}
-	}
-	fail(w, 404, "模板不存在")
-}
-
-func (a *App) templateDelete(w http.ResponseWriter, r *http.Request, name string) {
-	a.Store.mu.Lock()
-	out := a.Store.Data.Templates[:0]
-	for _, t := range a.Store.Data.Templates {
-		if tn, _ := t["name"].(string); tn != name {
-			out = append(out, t)
-		}
-	}
-	a.Store.Data.Templates = out
-	a.Store.mu.Unlock()
-	a.Store.Save()
-	writeJSON(w, 200, map[string]any{"success": true, "message": "模板已删除"})
-}
-
 // ---------- 定时任务 ----------
 
 // handleTasks GET/POST/PUT /api/tasks

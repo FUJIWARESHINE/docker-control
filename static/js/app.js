@@ -16,7 +16,6 @@
     { group: '运维' },
     { id: 'updates', view: 'updates', icon: 'i-refresh', label: '更新中心' },
     { id: 'tasks', view: 'tasks', icon: 'i-clock', label: '定时任务' },
-    { id: 'templates', view: 'templates', icon: 'i-file', label: '模板' },
     { group: '系统' },
     { id: 'settings', view: 'settings', icon: 'i-gear', label: '系统设置' },
   ];
