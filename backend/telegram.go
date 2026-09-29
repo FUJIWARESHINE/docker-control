@@ -767,12 +767,16 @@ func (a *App) tgLoop() {
 					chatID = cq.Message.Chat.ID
 					msgID = cq.Message.MessageID
 				}
-				if !a.tgAllowedChat(cfg, chatID) {
-					continue
-				}
-				text, kb := a.tgHandleCallback(cq.Data)
-				_ = a.tgEditKB(chatID, msgID, text, kb)
+			if !a.tgAllowedChat(cfg, chatID) {
+				a.Logs.Add("WARNING", fmt.Sprintf("Telegram 回调被拒绝（非白名单会话 %d）", chatID), "realtime")
 				continue
+			}
+			a.Logs.Add("INFO", "Telegram 按钮点击: "+cq.Data, "realtime")
+			text, kb := a.tgHandleCallback(cq.Data)
+			if err := a.tgEditKB(chatID, msgID, text, kb); err != nil {
+				a.Logs.Add("WARNING", "Telegram 消息更新失败: "+err.Error(), "realtime")
+			}
+			continue
 			}
 
 			// ---- 文本消息 ----
@@ -782,8 +786,11 @@ func (a *App) tgLoop() {
 			if !a.tgAllowedChat(cfg, u.Message.Chat.ID) {
 				continue
 			}
+			a.Logs.Add("INFO", "Telegram 收到指令: "+u.Message.Text, "realtime")
 			text, kb := a.tgHandleCommand(u.Message.Text)
-			_ = a.tgSendKB(u.Message.Chat.ID, text, kb)
+			if err := a.tgSendKB(u.Message.Chat.ID, text, kb); err != nil {
+				a.Logs.Add("WARNING", "Telegram 回复失败: "+err.Error(), "realtime")
+			}
 		}
 	}
 }
