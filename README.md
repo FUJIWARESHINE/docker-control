@@ -43,8 +43,42 @@ panel/
 │   └── js/               # api / ui / ws / app + views/*
 ├── Dockerfile            # 多阶段构建：golang:1.23-alpine → alpine
 ├── docker-compose.yml    # 部署文件（host 网络安全版）
-└── .github/workflows/    # push main 自动构建 GHCR 镜像
+└── .github/workflows/    # 自动构建 GHCR + Docker Hub 多架构镜像
 ```
+
+## 镜像与版本
+
+镜像同时发布到 **GHCR** 与 **Docker Hub**，均为 **amd64 + arm64 多架构**：
+
+```
+ghcr.io/fujiwareshine/docker-control:latest
+<dockerhub-user>/docker-control:latest
+```
+
+| tag | 含义 |
+|---|---|
+| `latest` | 最新发布版（推荐） |
+| `v1.0.0` | 精确版本，可锁定 |
+| `edge` | 主线开发版，含未发布改动 |
+| `sha-xxxxxxx` | 具体提交，便于排查 |
+
+**版本号来源：git tag。** 打 `v1.0.1` 这样的 tag 并推送，CI 自动：
+
+1. 从 tag 名解析出版本号 `1.0.1`
+2. 经 `--build-arg VERSION` + `-ldflags "-X main.Version=..."` 注入二进制
+3. 同时构建 amd64 / arm64 并合并成多架构 manifest
+4. 推送 GHCR 与 Docker Hub，tag 为 `latest` + `v1.0.1` + `sha-xxxxxxx`
+
+推 `main` 分支则构建 `latest` + `edge`（开发版，版本号标为 `0.0.0-<短SHA>`，不产生正式版本 tag）。
+
+**发布新版本：**
+
+```bash
+git tag -a v1.0.1 -m "v1.0.1 说明"
+git push origin v1.0.1
+```
+
+**锁定部署版本**：在 `.env` 里写 `DC_TAG=v1.0.0`，或在 compose 里直接写死 tag。
 
 ## 部署（NAS / Linux 服务器）
 
@@ -54,10 +88,18 @@ panel/
 
 ## 安全设计
 
-- 无 privileged：`cap_drop: ALL` + `no-new-privileges` + 非 root 用户运行
-- 最小挂载：只挂 docker.sock + 数据目录，不挂宿主机根目录
-- WebSocket 连接需携带会话 token（v1.0 补强）
-- 面板自身容器在 API 层从列表剔除（`docker-control.self` 标记）
+- **root 运行**：`docker.sock` 属主为 root，非 root 进程无法访问 —— 这是面板核心能力的前提，无法回避
+- 无 privileged：不启用 `privileged`，不挂宿主机根目录（`/:/host`）
+- 最小挂载：只挂 `docker.sock` + 数据目录 + Compose 项目根目录（窄挂载、同路径）
+- `no-new-privileges:true` 禁止提权
+- WebSocket 连接需携带会话 token
+- 面板自身容器在 API 层从列表剔除（`docker-control.self` 标记），且对其操作返回 403
+
+## Telegram 机器人
+
+支持按钮式交互：状态查询、容器启停/重启（带二次确认与短引用机制）、镜像列表、异常停止推送。
+
+在「系统设置 → Telegram」中填入 Bot Token 与 ChatID 即可启用。
 
 ## 已知限制（诚实清单）
 
