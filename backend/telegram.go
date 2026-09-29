@@ -12,11 +12,14 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -69,21 +72,27 @@ func (a *App) setTGStatus(s string) {
 	a.tgMu.Unlock()
 }
 
-// tgAPI 调用 Bot API，返回 result 字段的原始 JSON
-func (a *App) tgAPI(method string, payload map[string]any) (json.RawMessage, error) {
+// tgPoll 长轮询专用的 Bot API 调用。
+// 与 tgAPI 的区别：HTTP 超时更长（Telegram 侧 timeout 25s + 15s 余量），
+// 且只重试 1 次（长轮询本身失败后由主循环退避重来，不必在此堆叠）。
+func (a *App) tgPoll(method string, payload map[string]any) (json.RawMessage, error) {
 	cfg := a.tgConfig()
 	if cfg.Token == "" {
 		return nil, fmt.Errorf("未配置 Bot Token")
 	}
 	body, _ := json.Marshal(payload)
 	u := fmt.Sprintf("https://api.telegram.org/bot%s/%s", cfg.Token, method)
-	cli := &http.Client{Timeout: 60 * time.Second}
+
+	cli := tgHTTPClient()
+	cli.Timeout = 45 * time.Second
+
 	resp, err := cli.Post(u, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(resp.Body)
+
 	var r struct {
 		OK          bool            `json:"ok"`
 		Result      json.RawMessage `json:"result"`
@@ -96,6 +105,106 @@ func (a *App) tgAPI(method string, payload map[string]any) (json.RawMessage, err
 		return nil, fmt.Errorf("%s", r.Description)
 	}
 	return r.Result, nil
+}
+
+// tgDialer 返回 Telegram 请求专用的 Dialer。
+//
+// 背景：部分网络环境存在 DNS 污染（把 api.telegram.org 解析到无关 IP，
+// 如 Facebook 的 31.13.x.x / 2a03:2880::face:b00c），表现为间歇性
+// TLS handshake failure。此时可通过环境变量指定可信 DNS 覆盖解析：
+//
+//	TG_DNS_ADDR=8.8.8.8:53        # 用该 DNS 解析（推荐 DoH 不可用时用这个）
+//	TG_FORCE_IP=149.154.167.220   # 直接写死 IP（绕过 DNS，最粗暴但最可靠）
+//
+// 未设置时返回 nil，调用方走 Go 默认解析，行为与从前一致。
+func tgDialer() (*net.Dialer, string) {
+	d := &net.Dialer{Timeout: 15 * time.Second, KeepAlive: 30 * time.Second}
+
+	// 优先级 1：直接写死 IP（最可靠）
+	if ip := strings.TrimSpace(os.Getenv("TG_FORCE_IP")); ip != "" {
+		return d, ip
+	}
+	// 优先级 2：指定 DNS 解析器
+	if addr := strings.TrimSpace(os.Getenv("TG_DNS_ADDR")); addr != "" {
+		r := &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+				nd := net.Dialer{Timeout: 5 * time.Second}
+				return nd.DialContext(ctx, "udp", addr)
+			},
+		}
+		d.Resolver = r
+	}
+	return d, ""
+}
+
+// tgHTTPClient 构造带重试友好参数的 Telegram 客户端
+func tgHTTPClient() *http.Client {
+	d, forceIP := tgDialer()
+	tr := &http.Transport{
+		DialContext:         d.DialContext,
+		TLSHandshakeTimeout: 15 * time.Second,
+		// 强制走 IPv4：污染结果常是 IPv6/无效 IP
+		ForceAttemptHTTP2: true,
+	}
+	if forceIP != "" {
+		// 把 Telegram 域名固定解析到指定 IP
+		tr.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if strings.Contains(addr, "api.telegram.org") {
+				addr = net.JoinHostPort(forceIP, "443")
+			}
+			return d.DialContext(ctx, network, addr)
+		}
+	}
+	return &http.Client{Timeout: 30 * time.Second, Transport: tr}
+}
+
+// tgAPI 调用 Bot API，返回 result 字段的原始 JSON。
+//
+// 网络层自动重试（最多 3 次，指数退避）：
+// Telegram 域名常被解析到多个 IP，其中部分不可达，会出现间歇性的
+// TLS handshake failure / i/o timeout。这种错误重试一次通常即成功。
+// 注意：只对「网络类错误」重试，Telegram 返回的业务错误（如 Token 无效）
+// 不重试，避免无谓等待。
+func (a *App) tgAPI(method string, payload map[string]any) (json.RawMessage, error) {
+	cfg := a.tgConfig()
+	if cfg.Token == "" {
+		return nil, fmt.Errorf("未配置 Bot Token")
+	}
+	body, _ := json.Marshal(payload)
+	u := fmt.Sprintf("https://api.telegram.org/bot%s/%s", cfg.Token, method)
+
+	var lastErr error
+	backoff := 800 * time.Millisecond
+	for attempt := 1; attempt <= 3; attempt++ {
+		if attempt > 1 {
+			time.Sleep(backoff)
+			backoff *= 3
+		}
+		resp, err := tgHTTPClient().Post(u, "application/json", bytes.NewReader(body))
+		if err != nil {
+			lastErr = err
+			continue // 网络类错误 → 重试
+		}
+		raw, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		var r struct {
+			OK          bool            `json:"ok"`
+			Result      json.RawMessage `json:"result"`
+			Description string          `json:"description"`
+		}
+		if err := json.Unmarshal(raw, &r); err != nil {
+			lastErr = fmt.Errorf("响应解析失败: %s", string(raw))
+			continue
+		}
+		if !r.OK {
+			// 业务错误（Token 无效、chat 不存在等）重试无意义，直接返回
+			return nil, fmt.Errorf("%s", r.Description)
+		}
+		return r.Result, nil
+	}
+	return nil, fmt.Errorf("重试 3 次仍失败: %w", lastErr)
 }
 
 // tgSend 向配置的 Chat ID 发送消息
@@ -143,7 +252,36 @@ func (a *App) tgEditKB(chatID, msgID int64, text string, kb [][]map[string]any) 
 		payload["reply_markup"] = map[string]any{"inline_keyboard": [][]map[string]any{}}
 	}
 	_, err := a.tgAPI("editMessageText", payload)
-	return err
+	if err != nil && strings.Contains(err.Error(), "message is not modified") {
+		// 用户重复点同一按钮（如连点两次「检查更新」），内容与键盘都没变，
+		// Telegram 会拒绝这次编辑。这不算错误，但用户也看不到任何反馈，
+		// 容易误以为按钮失灵。
+		//
+		// 解法：在末尾追加一行零宽字符组成的时间戳（肉眼不可见，但让
+		// Telegram 认为内容已变化），用户便能感知到「刷新了」。
+		payload["text"] = text + "\n" + zeroWidthStamp()
+		if _, err2 := a.tgAPI("editMessageText", payload); err2 != nil {
+			// 仍失败就静默放过：内容本来就完全一致，用户看到的就是正确结果
+			return nil
+		}
+	}
+	return nil
+}
+
+// zeroWidthStamp 返回由零宽字符编码的时间戳，肉眼完全不可见。
+// 用零宽空格(U+200B)与零宽不连字(U+200C)表示二进制位。
+func zeroWidthStamp() string {
+	n := time.Now().UnixNano()
+	var sb strings.Builder
+	for i := 0; i < 26; i++ {
+		if n&1 == 1 {
+			sb.WriteRune('\u200B') // 1
+		} else {
+			sb.WriteRune('\u200C') // 0
+		}
+		n >>= 1
+	}
+	return sb.String()
 }
 
 // Notify 供其他模块调用的事件推送（未启用则静默返回）
@@ -735,9 +873,11 @@ func (a *App) tgLoop() {
 			time.Sleep(5 * time.Second)
 			continue
 		}
-		res, err := a.tgAPI("getUpdates", map[string]any{
+		// 长轮询用独立客户端：HTTP 超时必须明显大于 Telegram 侧的 timeout，
+		// 否则会出现「Telegram 还在等消息、客户端已经超时」的假失败。
+		res, err := a.tgPoll("getUpdates", map[string]any{
 			"offset":  lastUpdateID + 1,
-			"timeout": 30,
+			"timeout": 25,
 		})
 		if err != nil {
 			a.setTGStatus("错误: " + err.Error())
