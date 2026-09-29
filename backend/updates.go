@@ -105,10 +105,27 @@ func registryDigest(image string) (string, error) {
 // handleCheckUpdates POST /api/updates/check {container_name?}
 func (a *App) handleCheckUpdates(w http.ResponseWriter, r *http.Request) {
 	specific := bodyStr(readBody(r), "container_name")
-	cs, err := a.Docker.ListContainers(true)
+	results, err := a.checkUpdates(specific)
 	if err != nil {
 		fail(w, 500, err.Error())
 		return
+	}
+	n := 0
+	for _, r := range results {
+		if r.HasUpdate {
+			n++
+		}
+	}
+	a.Logs.Add("SUCCESS", fmt.Sprintf("更新检查完成: %d 个容器，%d 个可更新", len(results), n), "realtime")
+	writeJSON(w, 200, map[string]any{"success": true, "data": results})
+}
+
+// checkUpdates 对比本地与远端 registry digest，返回每个容器的更新状态。
+// specific 非空时只检查指定容器。供 HTTP 接口与 Telegram 机器人共用。
+func (a *App) checkUpdates(specific string) ([]updateResult, error) {
+	cs, err := a.Docker.ListContainers(true)
+	if err != nil {
+		return nil, err
 	}
 	imgs, _ := a.Docker.ListImages()
 	localDigest := map[string]string{}
@@ -156,14 +173,7 @@ func (a *App) handleCheckUpdates(w http.ResponseWriter, r *http.Request) {
 	a.Store.Data.LastCheck = a.Store.Now()
 	a.Store.mu.Unlock()
 	a.Store.Save()
-	n := 0
-	for _, r := range results {
-		if r.HasUpdate {
-			n++
-		}
-	}
-	a.Logs.Add("SUCCESS", fmt.Sprintf("更新检查完成: %d 个容器，%d 个可更新", len(results), n), "realtime")
-	writeJSON(w, 200, map[string]any{"success": true, "data": results})
+	return results, nil
 }
 
 // handleUpdateSettings GET/PUT /api/updates/settings

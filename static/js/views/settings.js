@@ -39,7 +39,7 @@
               </label>
               <div class="field"><label>HTTP 代理</label><input id="pxHttp" placeholder="http://127.0.0.1:7890" /></div>
               <div class="field" style="margin-top:10px"><label>HTTPS 代理</label><input id="pxHttps" placeholder="http://127.0.0.1:7890" /></div>
-              <div class="field" style="margin-top:10px"><label>不走代理的地址（NO_PROXY）</label><input id="pxNo" placeholder="localhost,127.0.0.1,.internal" /></div>
+              <div class="field" style="margin-top:10px"><label>不走代理的地址（NO_PROXY，留空则自动附加镜像加速器）</label><input id="pxNo" placeholder="localhost,127.0.0.1,.internal" /></div>
               <div id="pxState" class="muted" style="margin-top:10px"></div>
               <div style="display:flex;gap:8px;margin-top:12px">
                 <button type="button" class="btn primary" id="pxSave"><svg><use href="#i-check"/></svg><span>保存并生效</span></button>
@@ -48,12 +48,12 @@
             </div>
             <div class="card">
               <h4>Telegram 机器人</h4>
-              <p class="muted" style="margin:4px 0 10px">只读模式：可查询容器/镜像/状态，不支持启停删除。事件推送可单独开关。</p>
+              <p class="muted" style="margin:4px 0 10px">按钮式交互：发送 /start 弹出菜单，可查看状态、容器、项目、检查更新、重启服务。<b>写操作需二次确认</b>，且不会展示或操作面板自身。</p>
               <label class="row" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
                 <input type="checkbox" id="tgEnabled" /> <span>启用机器人</span>
               </label>
               <div class="field"><label>Bot Token</label><input id="tgToken" placeholder="123456:ABC-DEF..." /></div>
-              <div class="field" style="margin-top:10px"><label>Chat ID</label><input id="tgChat" placeholder="123456789" /></div>
+              <div class="field" style="margin-top:10px"><label>Chat ID <span class="dim">（向 @userinfobot 发消息可获取）</span></label><input id="tgChat" placeholder="123456789" /></div>
               <div style="display:flex;gap:14px;margin-top:12px;flex-wrap:wrap">
                 <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="tgNotifyDown" /> <span>容器停止推送</span></label>
                 <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="tgNotifyUpdate" /> <span>更新可用推送</span></label>
@@ -64,6 +64,7 @@
                 <button type="button" class="btn primary" id="tgSave"><svg><use href="#i-check"/></svg><span>保存配置</span></button>
                 <button type="button" class="btn ghost" id="tgTest"><svg><use href="#i-log"/></svg><span>发送测试消息</span></button>
               </div>
+              <p class="muted" style="margin:10px 0 0;font-size:11px">可用指令：/start /status /containers /projects /images /updates /version /proxy /logs &lt;容器名&gt;</p>
             </div>
             <div class="card">
               <h4>容器别名</h4>

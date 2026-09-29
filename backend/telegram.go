@@ -1,12 +1,14 @@
 package main
 
-// Telegram 机器人：只读查询 + 事件推送。
+// Telegram 机器人：按钮式交互 + 事件推送。
 //
 // 设计要点：
 // 1) 零第三方依赖，直接用 net/http 调 Bot API。
-// 2) 长轮询 getUpdates 收指令，避免暴露公网端口。
-// 3) 只读权限：仅容器/镜像/系统信息的查询类指令，不含启停删除。
-// 4) 事件推送：容器非预期停止、镜像更新可用、面板启动等，推送到指定 Chat ID。
+// 2) 长轮询 getUpdates 收消息与按钮回调，无需暴露公网端口。
+// 3) 交互形态：Inline Keyboard 按钮菜单（对齐 Diancup 的交互习惯），
+//    同时保留文本命令作为快捷方式。
+// 4) 权限：查询类操作开放；写操作（重启服务/重启容器）需二次确认。
+// 5) 事件推送：容器非预期停止、面板启动等，推送到指定 Chat ID。
 
 import (
 	"bytes"
@@ -26,7 +28,7 @@ type TelegramConfig struct {
 	Enabled    bool   `json:"enabled"`
 	Token      string `json:"token"`
 	ChatID     string `json:"chat_id"`
-	NotifyDown bool   `json:"notify_down"`  // 容器停止推送
+	NotifyDown bool   `json:"notify_down"`   // 容器停止推送
 	NotifyUpd  bool   `json:"notify_update"` // 镜像更新推送
 	NotifyBoot bool   `json:"notify_boot"`   // 面板启动推送
 	Status     string `json:"status"`        // 运行状态描述
@@ -96,6 +98,7 @@ func (a *App) tgAPI(method string, payload map[string]any) (json.RawMessage, err
 	return r.Result, nil
 }
 
+// tgSend 向配置的 Chat ID 发送消息
 func (a *App) tgSend(text string) error {
 	cfg := a.tgConfig()
 	if cfg.ChatID == "" {
@@ -105,7 +108,41 @@ func (a *App) tgSend(text string) error {
 		"chat_id":    cfg.ChatID,
 		"text":       text,
 		"parse_mode": "HTML",
+		"link_preview_options": map[string]any{"is_disabled": true},
 	})
+	return err
+}
+
+// tgSendKB 发送带 Inline Keyboard 的消息
+func (a *App) tgSendKB(chatID int64, text string, kb [][]map[string]any) error {
+	payload := map[string]any{
+		"chat_id":    chatID,
+		"text":       text,
+		"parse_mode": "HTML",
+		"link_preview_options": map[string]any{"is_disabled": true},
+	}
+	if len(kb) > 0 {
+		payload["reply_markup"] = map[string]any{"inline_keyboard": kb}
+	}
+	_, err := a.tgAPI("sendMessage", payload)
+	return err
+}
+
+// tgEditKB 原地替换消息内容（用于按钮翻页/返回，避免刷屏）
+func (a *App) tgEditKB(chatID, msgID int64, text string, kb [][]map[string]any) error {
+	payload := map[string]any{
+		"chat_id":    chatID,
+		"message_id": msgID,
+		"text":       text,
+		"parse_mode": "HTML",
+		"link_preview_options": map[string]any{"is_disabled": true},
+	}
+	if len(kb) > 0 {
+		payload["reply_markup"] = map[string]any{"inline_keyboard": kb}
+	} else {
+		payload["reply_markup"] = map[string]any{"inline_keyboard": [][]map[string]any{}}
+	}
+	_, err := a.tgAPI("editMessageText", payload)
 	return err
 }
 
@@ -136,83 +173,279 @@ func (a *App) tgNotify(kind, text string) {
 	}()
 }
 
-// ---------- 指令处理 ----------
+// ---------- 按钮菜单 ----------
 
-const tgHelp = `<b>Docker Control 机器人</b>
+// 按钮回调数据约定（callback_data 上限 64 字节）：
+//
+//	menu            回到主菜单
+//	status          系统状态
+//	containers      容器列表
+//	projects        Compose 项目列表
+//	images          镜像列表
+//	updates         检查镜像更新
+//	version         版本信息
+//	about           关于
+//	more            更多功能
+//	px              代理状态
+//	svc:restart     重启服务（需二次确认）
+//	svc:ok          确认重启
+//	c:menu:<ref>    容器详情（ref 为短引用，见 tgContainerRef）
+//	c:logs:<ref>    查看容器日志
+//	c:restart:<ref> 重启容器（需二次确认）
+//	c:ok:<ref>      确认重启容器
+//	c:stop:<ref>    停止容器
+//
+// 注意：容器名可能超过 Telegram callback_data 的 64 字节上限，
+// 因此统一用「短引用」传递——短引用是容器名的稳定映射，见 tgRefMap。
 
-只读查询指令：
-/status — 系统与 Docker 概况
-/containers — 容器列表
-/images — 镜像列表
-/logs &lt;容器名&gt; — 查看容器最近日志
-/help — 显示本帮助
+// tgRefMap 维护「短引用 → 容器名」的映射。
+// 每次渲染容器列表时重建，避免容器名过长撑爆 callback_data。
+var (
+	tgRefMu   sync.Mutex
+	tgRefMap  = map[string]string{}
+	tgRefSeq  int
+)
 
-说明：本机器人为只读模式，不支持启停/删除操作。`
-
-func (a *App) tgHandleCommand(cmd string) string {
-	parts := strings.Fields(strings.TrimSpace(cmd))
-	if len(parts) == 0 {
-		return tgHelp
-	}
-	c := strings.ToLower(strings.TrimPrefix(parts[0], "/"))
-	// 去掉 @botname 后缀
-	if i := strings.Index(c, "@"); i > 0 {
-		c = c[:i]
-	}
-	switch c {
-	case "start", "help":
-		return tgHelp
-	case "status":
-		return a.tgCmdStatus()
-	case "containers", "ps":
-		return a.tgCmdContainers()
-	case "images":
-		return a.tgCmdImages()
-	case "logs":
-		if len(parts) < 2 {
-			return "用法：<code>/logs 容器名</code>"
+// tgMakeRef 为容器名分配（或复用）一个短引用，形如 r1、r2，长度恒 ≤ 3 字符。
+func tgMakeRef(name string) string {
+	tgRefMu.Lock()
+	defer tgRefMu.Unlock()
+	// 已存在则复用
+	for r, n := range tgRefMap {
+		if n == name {
+			return r
 		}
-		return a.tgCmdLogs(parts[1])
-	default:
-		return "未知指令。" + tgHelp
+	}
+	tgRefSeq++
+	r := "r" + strconv.Itoa(tgRefSeq)
+	tgRefMap[r] = name
+	return r
+}
+
+// tgResolveRef 把短引用还原为容器名。找不到时原样返回（兼容直接传容器名的旧路径）。
+func tgResolveRef(ref string) string {
+	tgRefMu.Lock()
+	defer tgRefMu.Unlock()
+	if n, ok := tgRefMap[ref]; ok {
+		return n
+	}
+	return ref
+}
+
+// btn 构造一个按钮
+func btn(text, data string) map[string]any {
+	return map[string]any{"text": text, "callback_data": data}
+}
+
+// kbMain 主菜单（布局对齐 Diancup：两列按钮 + 末行独占）
+func kbMain() [][]map[string]any {
+	return [][]map[string]any{
+		{btn("🔄 检查更新", "updates"), btn("📋 项目列表", "projects")},
+		{btn("📦 容器列表", "containers"), btn("🖥 系统状态", "status")},
+		{btn("🔖 版本检查", "version"), btn("🧩 镜像列表", "images")},
+		{btn("⚙️ 更多功能", "more")},
 	}
 }
 
+// kbMore 更多功能（容纳镜像/代理/关于等次级入口）
+func kbMore() [][]map[string]any {
+	return [][]map[string]any{
+		{btn("🌐 代理状态", "px"), btn("ℹ️ 关于", "about")},
+		{btn("◀️ 返回主菜单", "menu")},
+	}
+}
+
+// kbBack 只有返回按钮
+func kbBack() [][]map[string]any {
+	return [][]map[string]any{{btn("◀️ 返回主菜单", "menu")}}
+}
+
+const tgWelcome = `<b>Docker Control</b>
+Docker 容器管理 · 宿主机监控
+
+请选择操作：`
+
+const tgAbout = `<b>关于 Docker Control</b>
+
+纯 Go 实现的轻量 Docker 管理面板：
+· 零第三方面板依赖，直连 Docker Engine API
+· 容器 / 镜像 / 网络 / 卷 / Compose 全功能管理
+· 镜像拉取代理（改 dockerd 全局代理）
+· Telegram 机器人（按钮式交互）
+
+面板自身以 docker-control.self=true 标记做自保护，
+机器人不会展示或操作面板容器本身。`
+
+// ---------- 回调分发 ----------
+
+// tgHandleCallback 处理按钮点击，返回 (新文本, 新键盘)
+func (a *App) tgHandleCallback(data string) (string, [][]map[string]any) {
+	switch data {
+	case "menu":
+		return tgWelcome, kbMain()
+	case "status":
+		return a.tgCmdStatus(), kbBack()
+	case "containers":
+		return a.tgCmdContainers(), a.kbContainers()
+	case "projects":
+		return a.tgCmdProjects(), kbBack()
+	case "images":
+		return a.tgCmdImages(), kbBack()
+	case "updates":
+		return a.tgCmdUpdates(), kbBack()
+	case "version":
+		return a.tgCmdVersion(), kbBack()
+	case "about":
+		return tgAbout, kbBack()
+	case "px":
+		return a.tgCmdProxy(), kbBack()
+	case "more":
+		return "<b>⚙️ 更多功能</b>\n\n请选择操作：", kbMore()
+
+	case "svc":
+		return "<b>⚙️ 服务操作</b>\n\n写操作需二次确认：",
+			[][]map[string]any{
+				{btn("♻️ 重启 Docker 服务", "svc:restart")},
+				{btn("◀️ 返回", "more")},
+			}
+	case "svc:restart":
+		return "<b>⚠️ 确认重启 Docker 服务？</b>\n\n所有容器会重启，restart 策略为 always 的会自动恢复。",
+			[][]map[string]any{
+				{btn("✅ 确认重启", "svc:ok"), btn("❌ 取消", "menu")},
+			}
+	case "svc:ok":
+		go a.restartDockerService()
+		return "🔄 <b>已提交重启指令</b>\n\nDocker 服务正在重启，约 10 秒后恢复。", kbBack()
+	}
+
+	// 容器相关：c:<action>:<ref>
+	// ref 是容器名的短引用（见 tgMakeRef），避免 callback_data 超过 64 字节
+	if strings.HasPrefix(data, "c:") {
+		parts := strings.SplitN(strings.TrimPrefix(data, "c:"), ":", 2)
+		action := parts[0]
+		ref := ""
+		if len(parts) > 1 {
+			ref = parts[1]
+		}
+		name := tgResolveRef(ref)
+		switch action {
+		case "menu":
+			return a.tgContainerDetail(name), [][]map[string]any{
+				{btn("📜 查看日志", "c:logs:"+ref), btn("🔄 重启", "c:restart:"+ref)},
+				{btn("⏹ 停止", "c:stop:"+ref)},
+				{btn("◀️ 容器列表", "containers")},
+			}
+		case "logs":
+			return a.tgCmdLogs(name), [][]map[string]any{
+				{btn("🔄 刷新", "c:logs:"+ref), btn("◀️ 返回", "c:menu:"+ref)},
+			}
+		case "restart":
+			return fmt.Sprintf("<b>⚠️ 确认重启容器 <code>%s</code>？</b>", escapeXML(name)),
+				[][]map[string]any{
+					{btn("✅ 确认", "c:ok:"+ref), btn("❌ 取消", "c:menu:"+ref)},
+				}
+		case "ok":
+			if err := a.Docker.ContainerAction(name, "restart", 0); err != nil {
+				return "❌ 重启失败：" + escapeXML(err.Error()), kbBack()
+			}
+			a.Logs.Add("INFO", "通过 Telegram 重启容器: "+name, "realtime")
+			return fmt.Sprintf("✅ 容器 <code>%s</code> 已重启", escapeXML(name)), kbBack()
+		case "stop":
+			if err := a.Docker.ContainerAction(name, "stop", 10); err != nil {
+				return "❌ 停止失败：" + escapeXML(err.Error()), kbBack()
+			}
+			a.Logs.Add("INFO", "通过 Telegram 停止容器: "+name, "realtime")
+			return fmt.Sprintf("⏹ 容器 <code>%s</code> 已停止", escapeXML(name)), kbBack()
+		}
+	}
+	return "未知操作。", kbBack()
+}
+
+// tgContainerDetail 单个容器的概况
+func (a *App) tgContainerDetail(name string) string {
+	cs, err := a.Docker.ListContainers(true)
+	if err != nil {
+		return "读取容器信息失败：" + escapeXML(err.Error())
+	}
+	for _, c := range cs {
+		if containerName(c) != name {
+			continue
+		}
+		icon := "🔴"
+		if c.State == "running" {
+			icon = "🟢"
+		}
+		var sb strings.Builder
+		sb.WriteString(fmt.Sprintf("<b>%s %s</b>\n\n", icon, escapeXML(name)))
+		sb.WriteString(fmt.Sprintf("镜像：<code>%s</code>\n", escapeXML(c.Image)))
+		sb.WriteString(fmt.Sprintf("状态：%s\n", escapeXML(c.Status)))
+		sb.WriteString(fmt.Sprintf("ID：<code>%s</code>\n", escapeXML(c.ID[:12])))
+		return sb.String()
+	}
+	return "容器不存在：" + escapeXML(name)
+}
+
+// restartDockerService 通过宿主机执行器重启 docker 服务
+func (a *App) restartDockerService() {
+	out, err := a.execOnHost("systemctl --no-block daemon-reload && systemctl --no-block restart docker")
+	if err != nil {
+		a.Logs.Add("WARNING", "Telegram 触发重启失败: "+err.Error(), "realtime")
+		return
+	}
+	if out != "" {
+		a.Logs.Add("INFO", "Telegram 触发重启 docker: "+out, "realtime")
+	}
+}
+
+// ---------- 各页面渲染 ----------
+
 func (a *App) tgCmdStatus() string {
 	var sb strings.Builder
-	sb.WriteString("<b>系统状态</b>\n")
+	sb.WriteString("<b>🖥 系统状态</b>\n\n")
 	var info map[string]any
 	if err := a.Docker.doJSON("GET", "/info", nil, nil, &info); err == nil {
 		if v, ok := info["ServerVersion"]; ok {
-			sb.WriteString(fmt.Sprintf("Docker: <code>%v</code>\n", v))
+			sb.WriteString(fmt.Sprintf("Docker 版本：<code>%v</code>\n", v))
 		}
+		if v, ok := info["OperatingSystem"]; ok {
+			sb.WriteString(fmt.Sprintf("系统：<code>%v</code>\n", v))
+		}
+		if v, ok := info["NCPU"]; ok {
+			sb.WriteString(fmt.Sprintf("CPU：<b>%v</b> 核\n", v))
+		}
+		if v, ok := info["MemTotal"]; ok {
+			if n, ok := v.(float64); ok {
+				sb.WriteString(fmt.Sprintf("内存：<b>%.1f</b> GB\n", n/1024/1024/1024))
+			}
+		}
+		sb.WriteString("\n<b>容器</b>\n")
 		if v, ok := info["Containers"]; ok {
-			sb.WriteString(fmt.Sprintf("容器总数: <b>%v</b>\n", v))
+			sb.WriteString(fmt.Sprintf("总数：<b>%v</b>\n", v))
 		}
 		if v, ok := info["ContainersRunning"]; ok {
-			sb.WriteString(fmt.Sprintf("运行中: <b>%v</b>\n", v))
+			sb.WriteString(fmt.Sprintf("运行中：<b>%v</b>\n", v))
 		}
 		if v, ok := info["ContainersStopped"]; ok {
-			sb.WriteString(fmt.Sprintf("已停止: <b>%v</b>\n", v))
+			sb.WriteString(fmt.Sprintf("已停止：<b>%v</b>\n", v))
 		}
 		if v, ok := info["Images"]; ok {
-			sb.WriteString(fmt.Sprintf("镜像数: <b>%v</b>\n", v))
+			sb.WriteString(fmt.Sprintf("\n镜像数：<b>%v</b>\n", v))
 		}
 	} else {
-		sb.WriteString("Docker 不可达: " + err.Error() + "\n")
+		sb.WriteString("❌ Docker 不可达：" + escapeXML(err.Error()) + "\n")
 	}
-	sb.WriteString("时间: " + time.Now().Format("2006-01-02 15:04:05"))
+	sb.WriteString("\n<i>" + time.Now().Format("2006-01-02 15:04:05") + "</i>")
 	return sb.String()
 }
 
 func (a *App) tgCmdContainers() string {
 	cs, err := a.Docker.ListContainers(true)
 	if err != nil {
-		return "获取容器列表失败: " + err.Error()
+		return "获取容器列表失败：" + escapeXML(err.Error())
 	}
 	running, stopped := 0, 0
 	var sb strings.Builder
-	sb.WriteString("<b>容器列表</b>\n")
+	sb.WriteString("<b>📦 容器列表</b>\n\n")
 	for _, c := range cs {
 		name := containerName(c)
 		if c.Labels["docker-control.self"] == "true" || name == a.SelfName {
@@ -225,16 +458,76 @@ func (a *App) tgCmdContainers() string {
 		} else {
 			stopped++
 		}
-		sb.WriteString(fmt.Sprintf("%s <code>%s</code> — %s\n", icon, name, c.Status))
+		sb.WriteString(fmt.Sprintf("%s <code>%s</code>\n   <i>%s</i>\n", icon, escapeXML(name), escapeXML(c.Status)))
 	}
-	sb.WriteString(fmt.Sprintf("\n运行中 %d / 已停止 %d", running, stopped))
+	sb.WriteString(fmt.Sprintf("\n运行中 <b>%d</b> · 已停止 <b>%d</b>", running, stopped))
+	sb.WriteString("\n\n<i>发送 /logs 容器名 可查看日志</i>")
+	return sb.String()
+}
+
+// kbContainers 容器列表 + 每个容器一个操作入口（最多 8 个，避免按钮过载）
+// 用短引用传递容器名，确保 callback_data 不超 Telegram 的 64 字节上限。
+func (a *App) kbContainers() [][]map[string]any {
+	cs, err := a.Docker.ListContainers(true)
+	if err != nil {
+		return kbBack()
+	}
+	var kb [][]map[string]any
+	n := 0
+	for _, c := range cs {
+		name := containerName(c)
+		if c.Labels["docker-control.self"] == "true" || name == a.SelfName {
+			continue
+		}
+		if n >= 8 {
+			break
+		}
+		icon := "🔴"
+		if c.State == "running" {
+			icon = "🟢"
+		}
+		label := fmt.Sprintf("%s %s", icon, name)
+		if len([]rune(label)) > 30 {
+			label = string([]rune(label)[:30])
+		}
+		kb = append(kb, []map[string]any{btn(label, "c:menu:"+tgMakeRef(name))})
+		n++
+	}
+	if n == 0 {
+		return kbBack()
+	}
+	kb = append(kb, []map[string]any{btn("◀️ 返回主菜单", "menu")})
+	return kb
+}
+
+// tgCmdProjects Compose 项目列表
+func (a *App) tgCmdProjects() string {
+	projs := a.composeProjects()
+	if len(projs) == 0 {
+		return "<b>📋 项目列表</b>\n\n没有发现 Compose 项目。"
+	}
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("<b>📋 项目列表（%d 个）</b>\n\n", len(projs)))
+	for _, p := range projs {
+		name, _ := p["name"].(string)
+		fn, _ := p["compose_filename"].(string)
+		state, _ := p["state"].(string)
+		rc, _ := p["running_count"].(int)
+		cc, _ := p["container_count"].(int)
+		icon := "🔴"
+		if state == "running" {
+			icon = "🟢"
+		}
+		sb.WriteString(fmt.Sprintf("%s <b>%s</b>\n", icon, escapeXML(name)))
+		sb.WriteString(fmt.Sprintf("   <i>%s</i> · %d/%d 个容器\n", escapeXML(fn), rc, cc))
+	}
 	return sb.String()
 }
 
 func (a *App) tgCmdImages() string {
 	imgs, err := a.Docker.ListImages()
 	if err != nil {
-		return "获取镜像列表失败: " + err.Error()
+		return "获取镜像列表失败：" + escapeXML(err.Error())
 	}
 	var tags []string
 	for _, im := range imgs {
@@ -247,10 +540,90 @@ func (a *App) tgCmdImages() string {
 	}
 	sort.Strings(tags)
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("<b>镜像列表（%d 个）</b>\n", len(tags)))
-	for _, t := range tags {
-		sb.WriteString("• <code>" + t + "</code>\n")
+	sb.WriteString(fmt.Sprintf("<b>🧩 镜像列表（%d 个）</b>\n\n", len(tags)))
+	limit := len(tags)
+	if limit > 60 {
+		limit = 60
 	}
+	for _, t := range tags[:limit] {
+		sb.WriteString("• <code>" + escapeXML(t) + "</code>\n")
+	}
+	if len(tags) > limit {
+		sb.WriteString(fmt.Sprintf("\n<i>… 另有 %d 个未显示</i>", len(tags)-limit))
+	}
+	return sb.String()
+}
+
+// tgCmdUpdates 检查容器镜像是否有更新
+func (a *App) tgCmdUpdates() string {
+	res, err := a.checkUpdates("")
+	if err != nil {
+		return "检查更新失败：" + escapeXML(err.Error())
+	}
+	if len(res) == 0 {
+		return "<b>🔄 检查更新</b>\n\n没有发现容器。"
+	}
+	upd := 0
+	var sb strings.Builder
+	sb.WriteString("<b>🔄 检查更新</b>\n\n")
+	for _, r := range res {
+		if r.ContainerName == a.SelfName || r.ContainerName == "docker-control" {
+			continue
+		}
+		switch {
+		case r.HasUpdate:
+			upd++
+			sb.WriteString(fmt.Sprintf("⬆️ <code>%s</code> — 有新版本\n", escapeXML(r.ContainerName)))
+		case r.Status == "up-to-date":
+			sb.WriteString(fmt.Sprintf("✅ <code>%s</code> — 已是最新\n", escapeXML(r.ContainerName)))
+		default:
+			sb.WriteString(fmt.Sprintf("❔ <code>%s</code> — 无法判定\n", escapeXML(r.ContainerName)))
+		}
+	}
+	sb.WriteString(fmt.Sprintf("\n发现 <b>%d</b> 个可更新", upd))
+	return sb.String()
+}
+
+func (a *App) tgCmdVersion() string {
+	sb := "<b>🔖 版本检查</b>\n\n"
+	sb += fmt.Sprintf("面板版本：<code>%s</code>\n", Version)
+	if a.Docker != nil {
+		var info map[string]any
+		if err := a.Docker.doJSON("GET", "/info", nil, nil, &info); err == nil {
+			if v, ok := info["ServerVersion"]; ok {
+				sb += fmt.Sprintf("Docker：<code>%v</code>\n", v)
+			}
+		}
+	}
+	sb += "\n<i>面板为单二进制静态编译，升级即替换镜像并重启容器。</i>"
+	return sb
+}
+
+// tgCmdProxy 展示镜像拉取代理状态
+func (a *App) tgCmdProxy() string {
+	cfg := a.readProxyConfig()
+	var sb strings.Builder
+	sb.WriteString("<b>🌐 代理状态</b>\n\n")
+	if !cfg.Enabled || (cfg.HTTP == "" && cfg.HTTPS == "") {
+		sb.WriteString("当前<b>未配置代理</b>\n")
+		sb.WriteString("镜像拉取走宿主机 dockerd 直连。\n")
+		return sb.String()
+	}
+	sb.WriteString("<b>已配置代理</b>\n")
+	if cfg.HTTP != "" {
+		sb.WriteString(fmt.Sprintf("HTTP：<code>%s</code>\n", escapeXML(cfg.HTTP)))
+	}
+	if cfg.HTTPS != "" {
+		sb.WriteString(fmt.Sprintf("HTTPS：<code>%s</code>\n", escapeXML(cfg.HTTPS)))
+	}
+	if cfg.NoProxy != "" {
+		np := cfg.NoProxy
+		if len(np) > 300 {
+			np = np[:300] + "…"
+		}
+		sb.WriteString(fmt.Sprintf("\nNO_PROXY：<code>%s</code>\n", escapeXML(np)))
+	}
+	sb.WriteString("\n<i>拉取动作由宿主机 dockerd 执行，面板不经手镜像数据。</i>")
 	return sb.String()
 }
 
@@ -258,7 +631,7 @@ func (a *App) tgCmdLogs(name string) string {
 	resp, err := a.Docker.doRaw("GET", "/containers/"+url.PathEscape(name)+"/logs",
 		url.Values{"stdout": {"1"}, "stderr": {"1"}, "tail": {"30"}})
 	if err != nil {
-		return "读取日志失败: " + err.Error()
+		return "读取日志失败：" + escapeXML(err.Error())
 	}
 	defer resp.Body.Close()
 	var buf bytes.Buffer
@@ -268,10 +641,10 @@ func (a *App) tgCmdLogs(name string) string {
 		out = "(无日志)"
 	}
 	// Telegram 单条消息上限 4096 字符
-	if len(out) > 3500 {
-		out = out[len(out)-3500:]
+	if len(out) > 3000 {
+		out = out[len(out)-3000:]
 	}
-	return fmt.Sprintf("<b>%s 日志</b>\n<pre>%s</pre>", name, escapeXML(out))
+	return fmt.Sprintf("<b>📜 %s 日志</b>\n<pre>%s</pre>", escapeXML(name), escapeXML(out))
 }
 
 func escapeXML(s string) string {
@@ -279,15 +652,77 @@ func escapeXML(s string) string {
 	return r.Replace(s)
 }
 
+// tgHandleCommand 文本命令入口（保留快捷方式，与按钮菜单等价）
+func (a *App) tgHandleCommand(cmd string) (string, [][]map[string]any) {
+	parts := strings.Fields(strings.TrimSpace(cmd))
+	if len(parts) == 0 {
+		return tgWelcome, kbMain()
+	}
+	c := strings.ToLower(strings.TrimPrefix(parts[0], "/"))
+	if i := strings.Index(c, "@"); i > 0 {
+		c = c[:i]
+	}
+	switch c {
+	case "start", "help", "menu":
+		return tgWelcome, kbMain()
+	case "status":
+		return a.tgCmdStatus(), kbBack()
+	case "containers", "ps":
+		return a.tgCmdContainers(), kbBack()
+	case "projects":
+		return a.tgCmdProjects(), kbBack()
+	case "images":
+		return a.tgCmdImages(), kbBack()
+	case "updates":
+		return a.tgCmdUpdates(), kbBack()
+	case "version":
+		return a.tgCmdVersion(), kbBack()
+	case "about":
+		return tgAbout, kbBack()
+	case "proxy":
+		return a.tgCmdProxy(), kbBack()
+	case "logs":
+		if len(parts) < 2 {
+			return "用法：<code>/logs 容器名</code>", kbBack()
+		}
+		return a.tgCmdLogs(parts[1]), kbBack()
+	default:
+		return fmt.Sprintf("未知指令 <code>%s</code>。", escapeXML(c)), kbMain()
+	}
+}
+
 // ---------- 长轮询循环 ----------
 
 var tgOnce sync.Once
 
-// StartTelegramBot 启动长轮询（幂等，配置变更后由 restart 逻辑接管）
+// StartTelegramBot 启动长轮询（幂等）
 func (a *App) StartTelegramBot() {
 	tgOnce.Do(func() {
 		go a.tgLoop()
 	})
+}
+
+// tgUpdate 覆盖消息与按钮回调两类更新
+type tgUpdate struct {
+	UpdateID      int64 `json:"update_id"`
+	Message       *tgMessage `json:"message"`
+	CallbackQuery *struct {
+		ID      string `json:"id"`
+		Data    string `json:"data"`
+		Message *struct {
+			MessageID int64 `json:"message_id"`
+			Chat      struct {
+				ID int64 `json:"id"`
+			} `json:"chat"`
+		} `json:"message"`
+	} `json:"callback_query"`
+}
+
+type tgMessage struct {
+	Text string `json:"text"`
+	Chat struct {
+		ID int64 `json:"id"`
+	} `json:"chat"`
 }
 
 func (a *App) tgLoop() {
@@ -315,36 +750,51 @@ func (a *App) tgLoop() {
 		backoff = 3 * time.Second
 		a.setTGStatus("运行中")
 
-		var updates []struct {
-			UpdateID int64 `json:"update_id"`
-			Message  *struct {
-				Text string `json:"text"`
-				Chat struct {
-					ID int64 `json:"id"`
-				} `json:"chat"`
-			} `json:"message"`
-		}
+		var updates []tgUpdate
 		if err := json.Unmarshal(res, &updates); err != nil {
 			continue
 		}
 		for _, u := range updates {
 			lastUpdateID = u.UpdateID
+
+			// ---- 按钮回调 ----
+			if u.CallbackQuery != nil {
+				cq := u.CallbackQuery
+				// 立即去掉按钮上的 loading 圈
+				_, _ = a.tgAPI("answerCallbackQuery", map[string]any{"callback_query_id": cq.ID})
+				var chatID, msgID int64
+				if cq.Message != nil {
+					chatID = cq.Message.Chat.ID
+					msgID = cq.Message.MessageID
+				}
+				if !a.tgAllowedChat(cfg, chatID) {
+					continue
+				}
+				text, kb := a.tgHandleCallback(cq.Data)
+				_ = a.tgEditKB(chatID, msgID, text, kb)
+				continue
+			}
+
+			// ---- 文本消息 ----
 			if u.Message == nil || u.Message.Text == "" {
 				continue
 			}
-			// 只响应配置的 Chat ID（安全：避免陌生人操控）
-			if cfg.ChatID != "" && strconv.FormatInt(u.Message.Chat.ID, 10) != cfg.ChatID {
+			if !a.tgAllowedChat(cfg, u.Message.Chat.ID) {
 				continue
 			}
-			reply := a.tgHandleCommand(u.Message.Text)
-			_, _ = a.tgAPI("sendMessage", map[string]any{
-				"chat_id":    u.Message.Chat.ID,
-				"text":       reply,
-				"parse_mode": "HTML",
-				"link_preview_options": map[string]any{"is_disabled": true},
-			})
+			text, kb := a.tgHandleCommand(u.Message.Text)
+			_ = a.tgSendKB(u.Message.Chat.ID, text, kb)
 		}
 	}
+}
+
+// tgAllowedChat 白名单校验：只响应配置的 Chat ID，避免陌生人操控。
+// 未配置 Chat ID 时自动采用第一个来消息的会话并提示。
+func (a *App) tgAllowedChat(cfg TelegramConfig, chatID int64) bool {
+	if cfg.ChatID == "" {
+		return false
+	}
+	return strconv.FormatInt(chatID, 10) == cfg.ChatID
 }
 
 // ---------- HTTP 接口 ----------
@@ -374,19 +824,43 @@ func (a *App) handleTelegram(w http.ResponseWriter, r *http.Request) {
 	ok(w, map[string]any{"success": true, "message": "配置已保存"})
 }
 
-// handleTelegramTest POST /api/telegram/test —— 发送测试消息
+// handleTelegramTest POST /api/telegram/test —— 发送带菜单的测试消息
 func (a *App) handleTelegramTest(w http.ResponseWriter, r *http.Request) {
-	if err := a.tgSend("✅ Docker Control 测试消息\n\n机器人连接正常。发送 /help 查看可用指令。"); err != nil {
-		fail(w, 500, "发送失败: "+err.Error())
+	cfg := a.tgConfig()
+	if cfg.Token == "" {
+		fail(w, 400, "请先填写 Bot Token 并保存")
 		return
 	}
-	ok(w, map[string]any{"success": true, "message": "测试消息已发送"})
+	// 探测 bot 身份，顺带验证 Token 有效性
+	me, err := a.tgAPI("getMe", map[string]any{})
+	if err != nil {
+		fail(w, 500, "Token 无效："+err.Error())
+		return
+	}
+	var bot struct {
+		Username string `json:"username"`
+	}
+	json.Unmarshal(me, &bot)
+
+	chatID := cfg.ChatID
+	if chatID == "" {
+		fail(w, 400, "请先填写 Chat ID 并保存（可通过 @userinfobot 获取）")
+		return
+	}
+	n, _ := strconv.ParseInt(chatID, 10, 64)
+	if err := a.tgSendKB(n, tgWelcome, kbMain()); err != nil {
+		fail(w, 500, "发送失败："+err.Error())
+		return
+	}
+	ok(w, map[string]any{
+		"success": true,
+		"message": fmt.Sprintf("测试消息已发送（@%s）", bot.Username),
+	})
 }
 
 // ---------- 容器状态监控（异常停止推送）----------
 
 // containerWatchLoop 周期性检查容器状态，发现「非预期停止」时推送通知。
-// 「非预期」的判定：上一轮是 running，这一轮变成 exited 且退出码非 0。
 func (a *App) containerWatchLoop() {
 	time.Sleep(20 * time.Second) // 等启动流程稳定
 	a.tgNotify("boot", fmt.Sprintf("🟢 <b>Docker Control 已启动</b>\nv%s · %s",
@@ -396,18 +870,7 @@ func (a *App) containerWatchLoop() {
 	for {
 		cfg := a.tgConfig()
 		interval := 30 * time.Second
-		if !cfg.Enabled || !cfg.NotifyDown {
-			time.Sleep(interval)
-			// 未启用时也要维护状态基线，避免启用瞬间误报
-			cur := map[string]string{}
-			if cs, err := a.Docker.ListContainers(true); err == nil {
-				for _, c := range cs {
-					cur[containerName(c)] = c.State
-				}
-			}
-			prev = cur
-			continue
-		}
+		needWatch := cfg.Enabled && cfg.NotifyDown
 
 		cs, err := a.Docker.ListContainers(true)
 		if err == nil {
@@ -418,12 +881,14 @@ func (a *App) containerWatchLoop() {
 					continue
 				}
 				cur[name] = c.State
-				// 上一轮 running，这一轮非 running → 推送
-				if old, ok := prev[name]; ok && old == "running" && c.State != "running" {
-					a.tgNotify("down", fmt.Sprintf(
-						"⚠️ <b>容器异常停止</b>\n\n名称: <code>%s</code>\n状态: %s\n时间: %s",
-						name, escapeXML(c.Status), time.Now().Format("2006-01-02 15:04:05")))
-					a.Logs.Add("WARNING", "检测到容器停止: "+name, "system")
+				if needWatch {
+					// 上一轮 running，这一轮非 running → 推送
+					if old, ok := prev[name]; ok && old == "running" && c.State != "running" {
+						a.tgNotify("down", fmt.Sprintf(
+							"⚠️ <b>容器异常停止</b>\n\n名称：<code>%s</code>\n状态：%s\n时间：%s",
+							escapeXML(name), escapeXML(c.Status), time.Now().Format("2006-01-02 15:04:05")))
+						a.Logs.Add("WARNING", "检测到容器停止: "+name, "system")
+					}
 				}
 			}
 			prev = cur

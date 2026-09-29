@@ -134,26 +134,72 @@ func (a *App) composeAction(w http.ResponseWriter, r *http.Request, project, act
 	writeJSON(w, 200, map[string]any{"success": true, "message": "项目 " + project + " " + action + " 成功"})
 }
 
-// resolveHostPath 把「宿主机视角的路径」映射为「容器内可读写的路径」。
+// composeDirs 返回允许面板读写 compose 文件的宿主机目录白名单。
+//
+// 来源：环境变量 COMPOSE_DIRS（多个用英文冒号分隔）。
+// 部署时把这些目录「同路径」挂载进容器，容器内的路径与宿主机完全一致，
+// 因此面板可以直接按宿主机路径读写，无需前缀转换。
+//
+// 未配置时返回空切片，表示不限制目录（兼容旧的全挂载 /:/host:rw 方案）。
+func composeDirs() []string {
+	raw := envOr("COMPOSE_DIRS", "")
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	for _, d := range strings.Split(raw, ":") {
+		d = strings.TrimSpace(d)
+		if d != "" {
+			out = append(out, filepath.Clean(d))
+		}
+	}
+	return out
+}
+
+// allowedComposePath 校验 p 是否位于白名单目录内。
+// 白名单为空时放行（未配置即不限制）。
+// 使用 filepath.Clean + 前缀比较，防止 ../ 逃逸。
+func allowedComposePath(p string) bool {
+	dirs := composeDirs()
+	if len(dirs) == 0 {
+		return true
+	}
+	clean := filepath.Clean(p)
+	for _, d := range dirs {
+		if clean == d || strings.HasPrefix(clean, d+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
+}
+
+// resolveHostPath 把「宿主机视角的路径」解析为「容器内可读写的路径」。
 //
 // 背景：面板运行在容器里，而 compose 文件的路径来自容器的
 // com.docker.compose.project.config_files label，那是宿主机视角的路径。
 // 若容器未挂载宿主机文件系统，os.ReadFile 会直接 ENOENT（这是 Compose 编辑报错的根因）。
 //
-// 约定：部署时把宿主机根目录只读/读写挂载到容器内的 HOST_ROOT（默认 /host）。
-// 例如宿主机 /mnt/d/a/b.yml → 容器内 /host/mnt/d/a/b.yml。
+// 支持两种部署方式：
+//  1. 窄挂载（推荐）：把 compose 目录「同路径」挂进容器，
+//     容器内路径 == 宿主机路径，直接可用，无需任何转换。
+//  2. 根挂载（兼容）：挂 /:/host:rw 并设置 HOST_ROOT=/host，
+//     把宿主机路径映射到 /host 前缀下。
 //
 // 返回 (实际可用路径, 是否找到)。找不到时调用方应给出明确的部署提示。
 func resolveHostPath(p string) (string, bool) {
 	if p == "" {
 		return "", false
 	}
-	// 1) 原路径直接可用（未容器化运行，或恰好路径一致）
+	// 0) 白名单校验：只允许操作配置内的 compose 目录
+	if !allowedComposePath(p) {
+		return "", false
+	}
+	// 1) 原路径直接可用（窄挂载 / 未容器化运行 / 恰好路径一致）
 	if _, err := os.Stat(p); err == nil {
 		return p, true
 	}
-	// 2) 尝试映射到 HOST_ROOT 前缀
-	root := envOr("HOST_ROOT", "/host")
+	// 2) 尝试映射到 HOST_ROOT 前缀（旧的全挂载方案）
+	root := envOr("HOST_ROOT", "")
 	if root != "" && strings.HasPrefix(p, "/") {
 		candidate := filepath.Join(root, p)
 		if _, err := os.Stat(candidate); err == nil {
@@ -193,9 +239,17 @@ func (a *App) composeFile(w http.ResponseWriter, r *http.Request) {
 	// 路径映射：宿主机路径 → 容器内路径
 	realPath, found := resolveHostPath(path)
 	if !found {
+		if !allowedComposePath(path) {
+			fail(w, 403, fmt.Sprintf(
+				"路径 %s 不在允许的 Compose 目录内。当前白名单：%s。"+
+					"如需操作该目录，请调整部署时的 COMPOSE_DIRS 环境变量与挂载配置。",
+				path, strings.Join(composeDirs(), ", ")))
+			return
+		}
 		fail(w, 500, fmt.Sprintf(
 			"读取 compose 文件失败：容器内无法访问宿主机路径 %s。"+
-				"请在部署时把宿主机目录挂载进容器（例如 -v /:/host:rw 并设置 HOST_ROOT=/host）", path))
+				"请把该 compose 所在目录「同路径」挂载进容器（例如 -v /srv/docker:/srv/docker:rw）"+
+				"并设置 COMPOSE_DIRS=/srv/docker", path))
 		return
 	}
 

@@ -11,25 +11,42 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock   # 必需：Docker Engine API
       - ./data:/app/data             # 密码/配置/定时任务持久化
-      - /:/host:rw                   # Compose 文件读写：宿主机根目录映射到容器内 /host
+      # ---- Compose 项目目录（窄挂载）----------------------------------------
+      # 只挂载 compose 文件所在的父目录，且「同路径挂载」：
+      # 容器内路径与宿主机完全一致，面板可直接读写，无需任何路径转换。
+      # 请把 ${COMPOSE_DIR} 改成你自己的 compose 项目根目录，例如：
+      #   NAS/群晖：  /volume1/docker
+      #   软路由/OpenWrt：/opt/docker
+      #   普通 Linux： /srv/docker
+      # 多个目录用多行依次添加即可。
+      - ${COMPOSE_DIR:-/srv/docker}:${COMPOSE_DIR:-/srv/docker}:rw
     environment:
       - TZ=Asia/Shanghai
-      - HOST_ROOT=/host              # Compose 路径映射前缀（对应上面挂载点）
+      # Compose 读写根目录（多个用英文冒号分隔）。面板只在这些目录下读写 compose 文件。
+      - COMPOSE_DIRS=${COMPOSE_DIR:-/srv/docker}
     security_opt:
       - no-new-privileges:true
     labels:
       - docker-control.self=true    # 自保护标记：面板自身容器从容器列表剔除（防误操作）
 # ============================================================================
-# 关于 /:/host:rw 挂载的说明
+# 关于 Compose 文件读写的权限说明
 #
-# 用途：Compose 项目的「编辑」功能需要读写宿主机上的 docker-compose.yml 文件。
+# 用途：Compose 项目的「编辑」功能需要读写宿主机上的 docker-compose.yml。
 #       面板跑在容器里，不挂载的话 os.ReadFile(宿主机路径) 会直接 ENOENT。
 #
-# 风险：容器内可读写宿主机全部文件。本镜像以 root 运行，且宿主目录默认可写，
-#       请确保面板本身有强密码保护，不要直接暴露到公网。
+# 本配置采用「窄挂载」：只把 compose 项目根目录挂进来，宿主机其余文件
+# 容器内完全不可见。相比直接挂 /:/host:rw，权限面小得多。
 #
-# 如果不需要 Compose 编辑功能，把这一行删掉即可，其余功能不受影响。
-# 如需更小的权限面，可改为只挂 compose 文件所在目录：
-#       - /path/to/compose/dir:/host/path/to/compose/dir:rw
-#   并保持 HOST_ROOT=/host
+# 部署步骤：
+#   1. 设置环境变量 COMPOSE_DIR 指向你的 compose 项目根目录，例如
+#        COMPOSE_DIR=/volume1/docker docker compose up -d
+#      或直接修改本文件里两处 ${COMPOSE_DIR:-/srv/docker} 为绝对路径。
+#   2. 确保该目录下每个项目各有一个 docker-compose.yml。
+#   3. 面板会自动识别路径（同路径挂载，无需 HOST_ROOT 前缀）。
+#
+# 如果不需要 Compose 编辑功能，把 volumes 里那一行和 COMPOSE_DIRS 删掉即可。
+#
+# 兼容旧配置：若仍想用「根目录 + /host 前缀」的方式，可改为
+#       - /:/host:rw
+#   并设置 HOST_ROOT=/host，面板同样支持（通过 HOST_ROOT 做路径映射）。
 # ============================================================================

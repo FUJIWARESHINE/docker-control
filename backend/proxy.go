@@ -35,9 +35,12 @@ type ProxyConfig struct {
 	HostPath string `json:"host_path"` // 宿主机上的真实路径
 }
 
-// hostFilePath 把「宿主机绝对路径」映射为「容器内可访问的路径」
+// hostFilePath 把「宿主机绝对路径」映射为「容器内可访问的路径」。
+//
+// 仅当部署时设置了 HOST_ROOT（宽挂载 /:/host:rw 方案）才返回可用路径。
+// 窄挂载部署下宿主机 /etc 不可见，这里返回 false，由调用方回退到宿主机执行器。
 func hostFilePath(hostPath string) (string, bool) {
-	root := envOr("HOST_ROOT", "/host")
+	root := envOr("HOST_ROOT", "")
 	if root == "" {
 		return "", false
 	}
@@ -47,22 +50,36 @@ func hostFilePath(hostPath string) (string, bool) {
 	return filepath.Join(root, hostPath), true
 }
 
-// readProxyConfig 读取当前代理配置（从宿主机 drop-in 文件解析）
+// readProxyConfig 读取当前代理配置。
+//
+// 两条路径：
+//  1. 容器内能直接访问宿主机文件（宽挂载 /:/host:rw）→ 直接读，快；
+//  2. 窄挂载部署（容器看不到宿主机 /etc）→ 借特权容器读。
 func (a *App) readProxyConfig() ProxyConfig {
 	cfg := ProxyConfig{HostPath: proxyConfRelPath}
-	real, ok := hostFilePath(proxyConfRelPath)
-	if !ok {
+
+	var content string
+	var got bool
+	if real, ok := hostFilePath(proxyConfRelPath); ok {
+		if b, err := os.ReadFile(real); err == nil {
+			content, got = string(b), true
+		}
+	}
+	if !got {
+		// 回退：通过宿主机执行器读取
+		if s, exists, err := a.readHostFile(proxyConfRelPath); err == nil && exists {
+			content, got = s, true
+		}
+	}
+	if !got {
 		return cfg
 	}
-	b, err := os.ReadFile(real)
-	if err != nil {
-		return cfg
-	}
+
 	cfg.Applied = true
 	cfg.Enabled = true
 	// 解析 Environment= 行里的 KEY=VALUE
 	re := regexp.MustCompile(`(?m)^Environment="?([A-Za-z_]+)=([^"\n]*)"?`)
-	for _, m := range re.FindAllStringSubmatch(string(b), -1) {
+	for _, m := range re.FindAllStringSubmatch(content, -1) {
 		k, v := m[1], strings.TrimSpace(m[2])
 		switch strings.ToUpper(k) {
 		case "HTTP_PROXY":
@@ -114,17 +131,8 @@ func mergeNoProxy(user string) string {
 	return strings.Join(out, ",")
 }
 
-// writeProxyConfig 写宿主机 drop-in 文件（不重启，仅落盘）
-func (a *App) writeProxyConfig(httpP, httpsP, noP string) error {
-	real, ok := hostFilePath(proxyConfRelPath)
-	if !ok {
-		return fmt.Errorf("无法访问宿主机文件系统（HOST_ROOT=%s 不可用）。"+
-			"请在部署时挂载 -v /:/host:rw 并设置 HOST_ROOT=/host", envOr("HOST_ROOT", "/host"))
-	}
-	if err := os.MkdirAll(filepath.Dir(real), 0755); err != nil {
-		return fmt.Errorf("创建配置目录失败: %w", err)
-	}
-	// NO_PROXY 自动并入镜像加速器与内网白名单
+// buildProxyContent 生成 dockerd drop-in 的配置内容
+func buildProxyContent(httpP, httpsP, noP string) string {
 	noP = mergeNoProxy(noP)
 	var sb strings.Builder
 	sb.WriteString("# 由 docker-control 面板自动生成，请勿手工修改\n")
@@ -138,28 +146,64 @@ func (a *App) writeProxyConfig(httpP, httpsP, noP string) error {
 	if noP != "" {
 		sb.WriteString(fmt.Sprintf("Environment=\"NO_PROXY=%s\"\n", noP))
 	}
-	if err := os.WriteFile(real, []byte(sb.String()), 0644); err != nil {
-		return fmt.Errorf("写入代理配置失败: %w", err)
+	return sb.String()
+}
+
+// writeProxyConfig 写宿主机 drop-in 文件（不重启，仅落盘）。
+//
+// 优先直接写文件（宽挂载）；写不到时借特权容器写（窄挂载）。
+func (a *App) writeProxyConfig(httpP, httpsP, noP string) error {
+	content := buildProxyContent(httpP, httpsP, noP)
+
+	// 路径 1：容器内可直接写宿主机文件（宽挂载 /:/host:rw）
+	if real, ok := hostFilePath(proxyConfRelPath); ok {
+		if err := os.MkdirAll(filepath.Dir(real), 0755); err == nil {
+			if err := os.WriteFile(real, []byte(content), 0644); err == nil {
+				return nil
+			}
+		}
+	}
+
+	// 路径 2：借宿主机执行器写入（窄挂载部署）
+	if err := a.writeHostFile(proxyConfRelPath, content); err != nil {
+		return fmt.Errorf("写入代理配置失败：%w（需要宿主机执行镜像可用，或改用 /:/host:rw 挂载）", err)
 	}
 	return nil
 }
 
 // clearProxyConfig 删除宿主机 drop-in 文件
 func (a *App) clearProxyConfig() error {
-	real, ok := hostFilePath(proxyConfRelPath)
-	if !ok {
-		return fmt.Errorf("无法访问宿主机文件系统")
+	// 路径 1：直接删
+	if real, ok := hostFilePath(proxyConfRelPath); ok {
+		if err := os.Remove(real); err == nil || os.IsNotExist(err) {
+			return nil
+		}
 	}
-	if err := os.Remove(real); err != nil && !os.IsNotExist(err) {
+	// 路径 2：借宿主机执行器删（窄挂载）
+	if err := a.removeHostFile(proxyConfRelPath); err != nil {
 		return err
 	}
 	return nil
 }
 
+// hasHostPidNS 判断面板容器是否共享了宿主机 PID 命名空间。
+//
+// 只有当容器以 --pid=host（或 privileged 附带）启动时，/proc/1 才是宿主机的
+// init；否则 /proc/1 是容器自己的入口进程。据此判断能否直接 nsenter。
+func (a *App) hasHostPidNS() bool {
+	b, err := os.ReadFile("/proc/1/comm")
+	if err != nil {
+		return false
+	}
+	comm := strings.TrimSpace(string(b))
+	// 容器自己的入口是 docker-control；宿主机 init 通常是 systemd/init
+	return comm != "" && comm != "docker-control"
+}
+
 // reloadDockerProxy 让代理配置在宿主机上真正生效。
 //
 // 分两级尝试：
-//  1. 直接 nsenter 进宿主机 PID 1 —— 仅当面板容器本身带 privileged/hostPID 时可用；
+//  1. 直接 nsenter 进宿主机 PID 1 —— 仅当面板容器带 hostPID/privileged 时可用；
 //  2. 通过 docker.sock 起一次性特权容器代执行 —— 面板无需 privileged 也能工作（默认路径）。
 //
 // 关键设计：重启 dockerd 会连带杀掉发起它的容器自身。如果用同步的
@@ -172,8 +216,8 @@ func (a *App) reloadDockerProxy() (string, error) {
 	// --no-block：异步投递，立即返回，不阻塞等待服务状态变化
 	script := "systemctl --no-block daemon-reload && systemctl --no-block restart docker"
 
-	// 路径 1：面板自身具备宿主机命名空间（privileged / hostPID 部署）
-	if _, err := os.Stat("/proc/1/ns/pid"); err == nil {
+	// 路径 1：面板自身共享宿主机 PID 命名空间（privileged / hostPID 部署）
+	if a.hasHostPidNS() {
 		out, err := exec.Command("nsenter", "--target", "1",
 			"--mount", "--uts", "--ipc", "--net", "--pid", "--",
 			"sh", "-c", script).CombinedOutput()

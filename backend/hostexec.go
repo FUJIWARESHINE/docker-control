@@ -17,6 +17,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,10 +27,70 @@ import (
 	"time"
 )
 
+// base64Encode / base64Decode 便于在宿主机命令里安全传递文件内容
+func base64Encode(b []byte) string { return base64.StdEncoding.EncodeToString(b) }
+
+func base64Decode(s string) ([]byte, error) { return base64.StdEncoding.DecodeString(strings.TrimSpace(s)) }
+
 // hostExecImage 执行宿主机命令所用的镜像。
 // 优先用面板自身镜像：本地已存在、必然有 shell，避免运行时联网拉取。
 func hostExecImage() string {
 	return resolveExecImage()
+}
+
+// readHostFile 通过特权容器读取宿主机上的文件内容。
+//
+// 用途：窄挂载部署时，容器内看不到宿主机 /etc，无法直接 os.ReadFile。
+// 这里借用一次性特权容器进入宿主机命名空间后 cat 文件。
+// 文件不存在时返回 ("", false, nil)，不算错误。
+func (a *App) readHostFile(path string) (string, bool, error) {
+	// base64 编码避免二进制/换行干扰
+	cmd := fmt.Sprintf("if [ -f %s ]; then base64 -w0 %s; else echo __NOFILE__; fi",
+		shellQuote(path), shellQuote(path))
+	out, err := a.execOnHost(cmd)
+	if err != nil {
+		return "", false, err
+	}
+	out = strings.TrimSpace(out)
+	if out == "__NOFILE__" {
+		return "", false, nil
+	}
+	dec, derr := base64Decode(out)
+	if derr != nil {
+		return "", false, derr
+	}
+	return string(dec), true, nil
+}
+
+// writeHostFile 通过特权容器把内容写入宿主机文件（自动创建父目录）。
+func (a *App) writeHostFile(path, content string) error {
+	b64 := base64Encode([]byte(content))
+	cmd := fmt.Sprintf("mkdir -p %s && printf %%s %s | base64 -d > %s",
+		shellQuote(filepathDir(path)), shellQuote(b64), shellQuote(path))
+	_, err := a.execOnHost(cmd)
+	return err
+}
+
+// removeHostFile 通过特权容器删除宿主机文件。
+func (a *App) removeHostFile(path string) error {
+	cmd := fmt.Sprintf("rm -f %s && rmdir %s 2>/dev/null || true",
+		shellQuote(path), shellQuote(filepathDir(path)))
+	_, err := a.execOnHost(cmd)
+	return err
+}
+
+// shellQuote 单引号包裹，转义内部单引号，防止命令注入。
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// filepathDir 取路径的父目录（不经 filepath 包，保持 POSIX 语义）
+func filepathDir(p string) string {
+	i := strings.LastIndex(p, "/")
+	if i <= 0 {
+		return "/"
+	}
+	return p[:i]
 }
 
 // execOnHost 在宿主机命名空间执行 shell 命令，返回合并输出。
