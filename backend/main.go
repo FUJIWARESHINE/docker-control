@@ -14,7 +14,10 @@ import (
 	"sync"
 )
 
-const Version = "1.0.0"
+// Version 面板版本号。
+// 必须声明为 var（非 const）才能被编译期 -ldflags "-X main.Version=x.y.z" 覆盖，
+// 由 CI 在打 tag 时注入；直接用 go build / go run 时即为下面的默认值。
+var Version = "1.0.0"
 
 // App 全局运行时
 type App struct {

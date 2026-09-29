@@ -1,11 +1,18 @@
 # ============ 构建阶段：编译自研 Go 后端 ============
 FROM golang:1.23-alpine AS builder
 
+# VERSION 由 CI 通过 --build-arg 注入（取自 git tag）。
+# 本地直接 docker build 时不传则回落到 dev，不影响构建。
+ARG VERSION=dev
+
 WORKDIR /build
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend/ .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/docker-control .
+# 用 -X 把版本号写进 main.Version 变量（需 main.go 里把 Version 改成 var）
+RUN CGO_ENABLED=0 GOOS=linux go build \
+      -ldflags="-s -w -X main.Version=${VERSION}" \
+      -o /out/docker-control .
 
 # ============ 运行阶段：纯净 alpine ============
 FROM alpine:3.20

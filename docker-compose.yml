@@ -1,8 +1,14 @@
-# Docker Control v1.0 — 全新重构版
+# Docker Control — 全新重构版
 # 部署：把本文件传到服务器，docker compose up -d，访问 http://<IP>:9527
+#
+# 镜像 tag 说明（自动构建，多架构 amd64/arm64）：
+#   :latest        最新发布版（推荐，跟随每次打 tag 的版本）
+#   :v1.0.1        精确版本，可锁定不回退
+#   :edge          主线开发版，含未发布改动（尝鲜用）
+#   锁定版本：在 .env 里写 DC_TAG=v1.0.1，或直接改下面 image 行的 tag
 services:
   docker-control:
-    image: ghcr.io/fujiwareshine/docker-control:v1.0   # 固定版本 tag（避免 NAS 缓存旧镜像）
+    image: ghcr.io/fujiwareshine/docker-control:${DC_TAG:-latest}   # 默认跟随最新发布版
     container_name: docker-control
     restart: always
     network_mode: host              # host 网络：端口页完整功能（/proc/net 扫描宿主机全端口）
