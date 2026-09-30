@@ -116,8 +116,8 @@
             <td><button type="button" class="icon-btn star${c.auto_update ? ' on' : ''}" data-op="auto"
                   title="${c.auto_update ? '已收藏 · 点此取消自动更新' : '收藏 · 加入自动更新'}"><svg><use href="#i-star"/></svg></button></td>
             <td class="name" style="cursor:pointer">
-              ${UI.esc(c.alias || c.name)}
-              ${c.compose_project ? `<span class="badge brand" style="margin-left:6px">${UI.esc(c.compose_project)}</span>` : ''}
+              <span class="nm">${UI.esc(c.alias || c.name)}</span>
+              ${c.compose_project ? `<span class="badge brand" title="${UI.esc(c.compose_project)}">${UI.esc(c.compose_project)}</span>` : ''}
             </td>
             <td class="mono">${UI.esc(c.image)}</td>
             <td>${UI.stateBadge(c.state)}</td>

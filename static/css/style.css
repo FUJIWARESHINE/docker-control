@@ -327,6 +327,25 @@ svg use { pointer-events: none; }
 .tbl tr { transition: background .15s var(--ease); }
 .tbl tbody tr:hover { background: rgba(255, 255, 255, .04); }
 .tbl .name { font-weight: 600; color: var(--fg); }
+/* 名称列：容器名 + compose 项目徽章横行排列，永不换行。
+   窄列时容器名自己省略号截断，徽章保持完整（整行紧贴右边界但不溢出）。
+   注：徽章 white-space:nowrap 不可收缩，若不给 flex 约束会整体折到第二行，
+   在 44px 固定行高下与下一行内容压叠 —— 这里必须显式锁住。 */
+.tbl .name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+.tbl .name > .nm {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tbl .name > .badge { flex: 0 0 auto; }
 .tbl .dim { color: var(--fg-dim); font-size: 11.5px; }
 .tbl .mono { font-family: "Cascadia Mono", Consolas, monospace; font-size: 11.5px; color: var(--fg-dim); }
 .tbl .actions { display: flex; gap: 3px; justify-content: flex-end; }
