@@ -16,18 +16,20 @@
               <button type="button" class="btn primary" id="stBtnPw" style="margin-top:12px"><svg><use href="#i-key"/></svg><span>确认修改</span></button>
             </div>
             <div class="card">
-              <h4>系统信息</h4>
-              <dl class="kv" id="stInfo" style="margin-top:10px"></dl>
-              <div style="display:flex;gap:8px;margin-top:14px">
-                <button type="button" class="btn" id="stBtnBackup"><svg><use href="#i-down"/></svg><span>下载配置备份</span></button>
-                <button type="button" class="btn flow-danger" id="stBtnRestart"><svg><use href="#i-restart"/></svg><span>重启面板</span></button>
-              </div>
-            </div>
-            <div class="card">
               <h4>API Key</h4>
               <p class="muted" style="margin:4px 0 10px">通过请求头 <span class="mono">X-API-Key</span> 调用面板 API，无需登录。</p>
               <div id="stKeys" style="display:flex;flex-direction:column;gap:6px"></div>
               <button type="button" class="btn small primary" id="stBtnKey" style="margin-top:10px"><svg><use href="#i-plus"/></svg><span>生成新 Key</span></button>
+            </div>
+            <div class="card">
+              <h4>容器别名</h4>
+              <p class="muted" style="margin:4px 0 10px">为容器设置显示别名（JSON：容器名 → {alias}）。</p>
+              <div class="field"><textarea id="stAlias" style="min-height:120px"></textarea></div>
+              <button type="button" class="btn small primary" id="stBtnAlias" style="margin-top:10px"><svg><use href="#i-check"/></svg><span>保存别名</span></button>
+            </div>
+            <div class="card">
+              <h4>操作日志</h4>
+              <div class="logview" id="stLogs" style="max-height:240px;margin-top:10px"></div>
             </div>
           </section>
           <section style="display:flex;flex-direction:column;gap:14px">
@@ -67,14 +69,12 @@
               <p class="muted" style="margin:10px 0 0;font-size:11px">可用指令：/start /status /containers /projects /images /updates /version /proxy /logs &lt;容器名&gt;</p>
             </div>
             <div class="card">
-              <h4>容器别名</h4>
-              <p class="muted" style="margin:4px 0 10px">为容器设置显示别名（JSON：容器名 → {alias}）。</p>
-              <div class="field"><textarea id="stAlias" style="min-height:120px"></textarea></div>
-              <button type="button" class="btn small primary" id="stBtnAlias" style="margin-top:10px"><svg><use href="#i-check"/></svg><span>保存别名</span></button>
-            </div>
-            <div class="card">
-              <h4>操作日志</h4>
-              <div class="logview" id="stLogs" style="max-height:340px;margin-top:10px"></div>
+              <h4>系统信息</h4>
+              <dl class="kv" id="stInfo" style="margin-top:10px"></dl>
+              <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+                <button type="button" class="btn" id="stBtnBackup"><svg><use href="#i-down"/></svg><span>下载配置备份</span></button>
+                <button type="button" class="btn flow-danger" id="stBtnRestart"><svg><use href="#i-restart"/></svg><span>重启面板</span></button>
+              </div>
             </div>
           </section>
         </div></div>`;

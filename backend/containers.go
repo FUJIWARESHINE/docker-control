@@ -22,7 +22,18 @@ func (a *App) toPanelItem(c DockerContainer) map[string]any {
 	name := containerName(c)
 	repo, tag := parseImage(c.Image)
 	ports := []map[string]any{}
+	// Docker 会把同一映射同时以 IPv4(0.0.0.0) 与 IPv6([::]) 两条记录返回，
+	// 直接展开会出现「18081->80/tcp」重复两行。这里按 公网端口->内部端口/协议 去重。
+	seenPorts := map[string]bool{}
 	for _, p := range c.Ports {
+		dk := fmt.Sprintf("%d/%s", p.PrivatePort, p.Type)
+		if p.PublicPort > 0 {
+			dk = fmt.Sprintf("%d->%d/%s", p.PublicPort, p.PrivatePort, p.Type)
+		}
+		if seenPorts[dk] {
+			continue
+		}
+		seenPorts[dk] = true
 		m := map[string]any{"container_port": p.PrivatePort, "protocol": p.Type}
 		if p.PublicPort > 0 {
 			m["host_port"] = p.PublicPort

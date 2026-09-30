@@ -298,7 +298,7 @@ svg use { pointer-events: none; }
   height: 36px;
   padding: 0 12px;
   text-align: left;
-  background: rgba(255, 255, 255, .035);
+  background: #171d2e;
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--stroke);
   font-size: 10px; font-weight: 700;
@@ -320,6 +320,40 @@ svg use { pointer-events: none; }
 .tbl .mono { font-family: "Cascadia Mono", Consolas, monospace; font-size: 11.5px; color: var(--fg-dim); }
 .tbl .actions { display: flex; gap: 3px; justify-content: flex-end; }
 .tbl tr.row-sel { background: linear-gradient(90deg, rgba(99, 102, 241, .14), rgba(99, 102, 241, .03)); }
+.tbl td.port-empty { text-align: center; color: var(--fg-mute); height: 64px; }
+
+/* 端口页：TCP / UDP 双列 */
+.port-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.port-panel {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-xl);
+  background: rgba(12, 16, 28, .5);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+.port-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 42px;
+  flex: 0 0 42px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, .035);
+  backdrop-filter: blur(8px);
+}
+.port-panel-head h4 { font-size: 12.5px; font-weight: 700; letter-spacing: .4px; }
+.port-panel-head .spacer { flex: 1; }
+.port-panel .tscroll { max-height: calc(100vh - 232px); }
+.dot.udp { background: var(--cyan); box-shadow: 0 0 8px rgba(34, 211, 238, .85); }
 
 /* 徽章 / 胶囊 */
 .badge {
@@ -829,7 +863,9 @@ svg use { pointer-events: none; }
 [data-theme="light"] .sidebar { background: rgba(255, 255, 255, .74); }
 [data-theme="light"] .topbar { background: rgba(255, 255, 255, .5); }
 [data-theme="light"] .table-card { background: rgba(255, 255, 255, .74); }
-[data-theme="light"] .tbl th { background: rgba(15, 23, 42, .035); }
+[data-theme="light"] .port-panel { background: rgba(255, 255, 255, .74); }
+[data-theme="light"] .port-panel-head { background: rgba(15, 23, 42, .035); }
+[data-theme="light"] .tbl th { background: #f3f5fa; }
 [data-theme="light"] .tbl tbody tr:hover { background: rgba(15, 23, 42, .04); }
 [data-theme="light"] .field input, [data-theme="light"] .field select, [data-theme="light"] .field textarea { background: #fff; }
 [data-theme="light"] .field select option { background: #fff; color: var(--fg); }
@@ -862,4 +898,6 @@ svg use { pointer-events: none; }
   .side-brand { justify-content: center; padding: 12px 0; }
   .nav-item { justify-content: center; padding: 0; }
   .kv { grid-template-columns: 110px 1fr; }
+  .port-cols { grid-template-columns: 1fr; }
+  .port-panel .tscroll { max-height: none; }
 }

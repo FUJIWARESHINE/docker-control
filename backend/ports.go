@@ -31,13 +31,23 @@ func (a *App) handlePortsList(w http.ResponseWriter, r *http.Request) {
 	cs, _ := a.Docker.ListContainers(true)
 	customNames := a.portCustomNames()
 	containerRows := []map[string]any{}
+	// 同一映射会以 IPv4(0.0.0.0) 与 IPv6([::]) 两条记录返回，按 端口/协议 去重
+	seen := map[string]bool{}
 	for _, c := range cs {
 		name := containerName(c)
+		// 自保护：面板自身容器不参与端口映射展示
+		if c.Labels["docker-control.self"] == "true" || name == a.SelfName {
+			continue
+		}
 		for _, p := range c.Ports {
 			if p.PublicPort == 0 {
 				continue
 			}
 			key := strconv.Itoa(p.PublicPort)
+			if seen[key+"/"+p.Type] {
+				continue
+			}
+			seen[key+"/"+p.Type] = true
 			containerRows = append(containerRows, map[string]any{
 				"port":           p.PublicPort,
 				"protocol":       p.Type,

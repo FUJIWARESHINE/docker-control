@@ -102,54 +102,88 @@
     },
   };
 
+  // 端口扫描：左列 TCP / 右列 UDP
   Views.ports = {
     title: '端口扫描',
     async mount(content) {
+      const head = `<thead><tr>
+        <th style="width:84px">端口</th><th>备注</th><th style="width:92px">来源</th><th>容器 / 内部端口</th><th style="width:50px;text-align:right">操作</th>
+      </tr></thead>`;
       content.innerHTML = `<div class="page">
         <div class="toolbar">
           <span class="pill" id="portCount"></span>
           <div class="spacer"></div>
           <button type="button" class="btn primary" id="portRefresh"><svg><use href="#i-refresh"/></svg><span>重新扫描</span></button>
         </div>
-        <div class="table-card"><div class="tscroll" style="max-height:calc(100vh - 200px)">
-          <table class="tbl"><thead><tr>
-            <th style="width:90px">端口</th><th style="width:70px">协议</th><th>备注</th><th>来源</th><th>容器 / 内部端口</th><th style="text-align:right">操作</th>
-          </tr></thead><tbody id="portRows"></tbody></table>
-        </div></div></div>`;
-      const rows = content.querySelector('#portRows');
+        <div class="port-cols">
+          <section class="port-panel">
+            <div class="port-panel-head">
+              <span class="dot running"></span><h4>TCP</h4>
+              <span class="spacer"></span><span class="pill"><b id="tcpCount">0</b> 个端口</span>
+            </div>
+            <div class="tscroll"><table class="tbl">${head}<tbody id="tcpRows"></tbody></table></div>
+          </section>
+          <section class="port-panel">
+            <div class="port-panel-head">
+              <span class="dot udp"></span><h4>UDP</h4>
+              <span class="spacer"></span><span class="pill"><b id="udpCount">0</b> 个端口</span>
+            </div>
+            <div class="tscroll"><table class="tbl">${head}<tbody id="udpRows"></tbody></table></div>
+          </section>
+        </div></div>`;
+      const tcpBody = content.querySelector('#tcpRows');
+      const udpBody = content.querySelector('#udpRows');
+
+      function emptyRow(msg) {
+        return `<tr class="port-empty"><td colspan="5" class="muted">${UI.esc(msg)}</td></tr>`;
+      }
+
+      function bindEdit(tr, p, reload) {
+        tr.querySelector('.icon-btn').addEventListener('click', () => {
+          const m = UI.modal({
+            title: `端口备注 · ${p.port}/${p.protocol}`,
+            body: `<div class="field"><label>备注名称</label><input id="pnName" /></div>`,
+            foot: [
+              { label: '取消', onClick: (c) => c() },
+              { label: '保存', cls: 'primary', icon: 'i-check', onClick: async (c) => {
+                const name = m.mask.querySelector('#pnName').value.trim();
+                try { await API.post(`/api/ports/${p.port}/name`, { name }); UI.toast('备注已保存', 'ok'); c(); reload(); }
+                catch (e) { UI.toast(e.message, 'error'); }
+              } },
+            ],
+          });
+          m.mask.querySelector('#pnName').value = p.service || '';
+        });
+      }
+
+      function render(rows, list) {
+        rows.innerHTML = '';
+        list.forEach(p => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td class="name mono">${p.port}</td>
+            <td class="dim svc">${UI.esc(p.service || '-')}</td>
+            <td>${p.host_only ? '<span class="badge unknown">Host</span>' : '<span class="badge ok">Container</span>'}</td>
+            <td class="mono dim">${UI.esc(p.container ? `${p.container} (${p.container_port})` : '-')}</td>
+            <td><div class="actions"><button type="button" class="icon-btn"><svg><use href="#i-edit"/></svg></button></div></td>`;
+          bindEdit(tr, p, load);
+          rows.appendChild(tr);
+        });
+      }
+
       async function load() {
         try {
           const s = await API.get('/api/ports');
-          const list = s.data || [];
-          content.querySelector('#portCount').innerHTML = `<b>${list.length}</b> 个端口`;
-          rows.innerHTML = '';
-          if (!list.length) return UI.fillEmpty(rows.closest('.table-card'), 'i-plug', '未发现监听端口', '');
-          list.forEach(p => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-              <td class="name mono">${p.port}</td>
-              <td><span class="badge ${p.protocol === 'tcp' ? 'brand' : 'cyan'}">${UI.esc(p.protocol.toUpperCase())}</span></td>
-              <td class="dim svc">${UI.esc(p.service || '-')}</td>
-              <td>${p.host_only ? '<span class="badge unknown">Host</span>' : '<span class="badge ok">Container</span>'}</td>
-              <td class="mono dim">${UI.esc(p.container ? `${p.container} (${p.container_port})` : '-')}</td>
-              <td><div class="actions"><button type="button" class="icon-btn"><svg><use href="#i-edit"/></svg></button></div></td>`;
-            tr.querySelector('.icon-btn').addEventListener('click', () => {
-              const m = UI.modal({
-                title: `端口备注 · ${p.port}/${p.protocol}`,
-                body: `<div class="field"><label>备注名称</label><input id="pnName" /></div>`,
-                foot: [
-                  { label: '取消', onClick: (c) => c() },
-                  { label: '保存', cls: 'primary', icon: 'i-check', onClick: async (c) => {
-                    const name = m.mask.querySelector('#pnName').value.trim();
-                    try { await API.post(`/api/ports/${p.port}/name`, { name }); UI.toast('备注已保存', 'ok'); c(); load(); }
-                    catch (e) { UI.toast(e.message, 'error'); }
-                  } },
-                ],
-              });
-              m.mask.querySelector('#pnName').value = p.service || '';
-            });
-            rows.appendChild(tr);
-          });
+          const all = s.data || [];
+          const tcp = all.filter(p => (p.protocol || '').toLowerCase() !== 'udp');
+          const udp = all.filter(p => (p.protocol || '').toLowerCase() === 'udp');
+          content.querySelector('#portCount').innerHTML = `<b>${all.length}</b> 个端口`;
+          content.querySelector('#tcpCount').textContent = tcp.length;
+          content.querySelector('#udpCount').textContent = udp.length;
+          render(tcpBody, tcp);
+          render(udpBody, udp);
+          if (!tcp.length) tcpBody.innerHTML = emptyRow('未发现 TCP 监听端口');
+          if (!udp.length) udpBody.innerHTML = emptyRow('未发现 UDP 监听端口');
         } catch (e) { UI.toast(e.message, 'error'); }
       }
       content.querySelector('#portRefresh').addEventListener('click', load);
