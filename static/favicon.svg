@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Docker Control">
+  <defs>
+    <linearGradient id="dcg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset=".55" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#dcg)"/>
+  <!-- 两块堆叠长条：上短下长，像一叠容器。间距 6 单位是为了 16px 下仍能分辨。 -->
+  <rect x="17.5" y="14" width="29" height="15" rx="4.5" fill="#ffffff" fill-opacity=".98"/>
+  <rect x="14" y="35" width="36" height="15" rx="4.5" fill="#ffffff" fill-opacity=".7"/>
+</svg>

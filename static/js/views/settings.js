@@ -7,8 +7,8 @@
     title: '系统设置',
     async mount(content) {
       content.innerHTML = `<div class="page">
-        <div class="grid c2" style="align-items:start">
-          <section style="display:flex;flex-direction:column;gap:14px">
+        <div class="grid c2 setgrid">
+          <section class="setcol">
             <div class="card">
               <h4>修改密码</h4>
               <div class="field" style="margin-top:10px"><label>原密码</label><input type="password" id="stOld" /></div>
@@ -27,12 +27,12 @@
               <div class="field"><textarea id="stAlias" style="min-height:120px"></textarea></div>
               <button type="button" class="btn small primary" id="stBtnAlias" style="margin-top:10px"><svg><use href="#i-check"/></svg><span>保存别名</span></button>
             </div>
-            <div class="card">
+            <div class="card setcard-grow">
               <h4>操作日志</h4>
-              <div class="logview" id="stLogs" style="max-height:240px;margin-top:10px"></div>
+              <div class="logview setlog" id="stLogs"></div>
             </div>
           </section>
-          <section style="display:flex;flex-direction:column;gap:14px">
+          <section class="setcol">
             <div class="card">
               <h4>镜像拉取代理</h4>
               <p class="muted" style="margin:4px 0 10px">镜像由宿主机 dockerd 拉取，此处配置会写入 dockerd 并重启它生效。<b>运行时由宿主机拉取</b>，面板不参与下载。</p>
@@ -68,10 +68,10 @@
               </div>
               <p class="muted" style="margin:10px 0 0;font-size:11px">可用指令：/start /status /containers /projects /images /updates /version /proxy /logs &lt;容器名&gt;</p>
             </div>
-            <div class="card">
+            <div class="card setcard-grow">
               <h4>系统信息</h4>
               <dl class="kv" id="stInfo" style="margin-top:10px"></dl>
-              <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+              <div style="display:flex;gap:8px;margin-top:auto;padding-top:14px;flex-wrap:wrap">
                 <button type="button" class="btn" id="stBtnBackup"><svg><use href="#i-down"/></svg><span>下载配置备份</span></button>
                 <button type="button" class="btn flow-danger" id="stBtnRestart"><svg><use href="#i-restart"/></svg><span>重启面板</span></button>
               </div>

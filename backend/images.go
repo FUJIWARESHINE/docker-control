@@ -91,28 +91,18 @@ func (a *App) imageTag(w http.ResponseWriter, r *http.Request, id string) {
 	if tag == "" {
 		tag = "latest"
 	}
-	resp, err := a.Docker.do("POST", "/images/"+id+"/tag", url.Values{"repo": {repo}, "tag": {tag}}, nil)
-	if err != nil {
+	if err := a.tagImage(id, repo, tag); err != nil {
 		fail(w, 500, err.Error())
-		return
-	}
-	resp.Body.Close()
-	if resp.StatusCode >= 400 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		fail(w, 500, truncate(string(b), 200))
 		return
 	}
 	ok(w, nil)
 }
 
+// imagesPrune POST /api/images/prune[?all=1]
+// 实际逻辑在 updates.go 的 PruneImages（与「自动清理镜像」共用同一套挑选规则，
+// 都会保留 *-bak 回滚镜像）。
 func (a *App) imagesPrune(w http.ResponseWriter, r *http.Request) {
-	var out map[string]any
-	if err := a.Docker.doJSON("POST", "/images/prune", url.Values{}, map[string]any{}, &out); err != nil {
-		fail(w, 500, "清理失败: "+err.Error())
-		return
-	}
-	a.Logs.Add("SUCCESS", "镜像清理完成", "realtime")
-	ok(w, out)
+	a.handlePruneImages(w, r)
 }
 
 // handleImagePull POST /api/images/pull {image, tag} —— 后台拉取，进度走 WS
@@ -174,7 +164,7 @@ func (a *App) pullImageStream(image, tag string) {
 		id, _ := msg["id"].(string)
 		progress, _ := msg["progress"].(string)
 		a.Hub.Broadcast("update_progress", map[string]any{
-			"container": image, "message": strings.TrimSpace(status+" "+id+" "+progress),
+			"container": image, "message": strings.TrimSpace(status + " " + id + " " + progress),
 			"status": status, "percentage": 0,
 		})
 	}

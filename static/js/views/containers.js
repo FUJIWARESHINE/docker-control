@@ -24,6 +24,7 @@
           <div class="table-card"><div class="tscroll" style="max-height:calc(100vh - 210px)">
             <table class="tbl"><thead><tr>
               <th style="width:34px"><span class="check" id="ctAll"></span></th>
+              <th style="width:34px" title="收藏 = 加入自动更新"></th>
               <th>名称</th><th>镜像</th><th>状态</th><th>端口</th><th>更新</th><th>创建时间</th><th style="text-align:right">操作</th>
             </tr></thead><tbody id="ctRows"></tbody></table>
           </div></div>
@@ -83,7 +84,7 @@
           const s = await API.get('/api/containers?all=1');
           list = s.data || [];
           render();
-          content.querySelector('#ctCount').innerHTML = `<b>${list.length}</b> 个容器`;
+          updateCount();
         } catch (e) {
           UI.fillEmpty(rows, 'i-warn', '加载失败', e.message);
         }
@@ -112,6 +113,8 @@
             .map(p => `${p.host_port}→${p.container_port}/${p.protocol}`).join('  ') || '-';
           tr.innerHTML = `
             <td><span class="check"></span></td>
+            <td><button type="button" class="icon-btn star${c.auto_update ? ' on' : ''}" data-op="auto"
+                  title="${c.auto_update ? '已收藏 · 点此取消自动更新' : '收藏 · 加入自动更新'}"><svg><use href="#i-star"/></svg></button></td>
             <td class="name" style="cursor:pointer">
               ${UI.esc(c.alias || c.name)}
               ${c.compose_project ? `<span class="badge brand" style="margin-left:6px">${UI.esc(c.compose_project)}</span>` : ''}
@@ -149,6 +152,19 @@
       }
 
       async function rowAction(name, op) {
+        // 收藏：切换该容器是否跟随自动更新（写进 /api/updates/{name}/auto）
+        if (op === 'auto') {
+          const c = list.find(x => x.name === name);
+          const on = !(c && c.auto_update);
+          try {
+            await API.post(`/api/updates/${encodeURIComponent(name)}/auto`, { enabled: on });
+            if (c) c.auto_update = on;
+            UI.toast(on ? `${name} 已收藏，加入自动更新` : `${name} 已取消自动更新`, on ? 'ok' : 'info');
+            render();
+            updateCount();
+          } catch (e) { UI.toast(e.message, 'error'); }
+          return;
+        }
         if (op === 'delete') {
           const okGo = await UI.confirm('删除容器', `确定删除容器「${name}」？该操作不可撤销。`, true);
           if (!okGo) return;
@@ -159,6 +175,12 @@
           UI.toast(`${name} ${op} 成功`, 'ok');
           load();
         } catch (e) { UI.toast(e.message, 'error'); }
+      }
+
+      function updateCount() {
+        const n = list.filter(c => c.auto_update).length;
+        content.querySelector('#ctCount').innerHTML =
+          `<b>${list.length}</b> 个容器` + (n ? ` · <b>${n}</b> 个自动更新` : '');
       }
 
       function selected() {

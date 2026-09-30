@@ -38,9 +38,20 @@ type StoreData struct {
 	AutoUpdate          map[string]bool   `json:"auto_update_containers"`
 	UpdateIntervalDays  int               `json:"update_interval_days"`
 	UpdateIntervalHours int               `json:"update_interval_hours"`
+	AutoUpdateLastRun   string            `json:"auto_update_last_run"`
+	AutoUpdateNextRun   string            `json:"auto_update_next_run"`
 	LastCheck           string            `json:"last_check"`
+	LastResults         []updateResult    `json:"last_results"` // 上次检查的完整结果，供更新中心刷新后直接回显
 	UpdateStatus        map[string]string `json:"update_status"`
 	HasUpdate           map[string]bool   `json:"has_update"`
+
+	// 镜像自动清理（更新中心）
+	AutoPruneEnabled       bool   `json:"auto_prune_enabled"`
+	AutoPruneAll           bool   `json:"auto_prune_all"` // false=仅悬空镜像, true=连未使用的有标签镜像一起清
+	AutoPruneIntervalHours int    `json:"auto_prune_interval_hours"`
+	AutoPruneLastRun       string `json:"auto_prune_last_run"`
+	AutoPruneNextRun       string `json:"auto_prune_next_run"`
+	AutoPruneLastFreed     int64  `json:"auto_prune_last_freed"`
 }
 
 type Store struct {
@@ -57,6 +68,7 @@ func NewStore(path string) *Store {
 	s.Data.UpdateStatus = map[string]string{}
 	s.Data.HasUpdate = map[string]bool{}
 	s.Data.UpdateIntervalDays = 7
+	s.Data.AutoPruneIntervalHours = 24
 	s.Load()
 	if s.Data.PasswordSalt == "" {
 		s.Data.PasswordSalt = randHex(16)
@@ -118,4 +130,19 @@ func (s *Store) HasAPIKey(k string) bool {
 	return false
 }
 
-func (s *Store) Now() string { return time.Now().Format("2006-01-02 15:04:05") }
+func (s *Store) Now() string { return time.Now().Format(timeLayout) }
+
+// timeLayout 面板统一的时间字符串格式（本地时区）。
+// 存进 config.json 的时间都可被 parseStoreTime 解析回来，供调度器比较。
+const timeLayout = "2006-01-02 15:04:05"
+
+func parseStoreTime(v string) (time.Time, bool) {
+	if v == "" {
+		return time.Time{}, false
+	}
+	t, err := time.ParseInLocation(timeLayout, v, time.Local)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
+}

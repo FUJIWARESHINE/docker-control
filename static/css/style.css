@@ -30,6 +30,8 @@
   --shadow-2: 0 10px 30px -16px rgba(0, 0, 0, .9);
   --shadow-glow: 0 12px 34px -18px rgba(99, 102, 241, .95);
   --side-w: 208px;
+  /* 顶部区域统一高度：侧栏品牌区与主区标题栏共用，保证两条分隔线严格对齐 */
+  --head-h: 52px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -101,7 +103,10 @@ svg use { pointer-events: none; }
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 14px 14px 12px;
+  /* 固定为 --head-h，与 .topbar 等高 —— 否则两条底边分隔线会错位 */
+  height: var(--head-h);
+  flex: 0 0 var(--head-h);
+  padding: 0 14px;
   border-bottom: 1px solid var(--stroke);
 }
 .side-brand .logo {
@@ -168,8 +173,8 @@ svg use { pointer-events: none; }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
 .topbar {
-  height: 50px;
-  flex: 0 0 50px;
+  height: var(--head-h);
+  flex: 0 0 var(--head-h);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -279,6 +284,12 @@ svg use { pointer-events: none; }
 }
 .icon-btn:hover { background: var(--panel-3); color: var(--fg); }
 .icon-btn.del:hover { background: rgba(248, 113, 113, .18); color: #fca5a5; }
+
+/* 收藏（= 加入自动更新）：未收藏为灰色描边星，收藏后实心高亮 */
+.icon-btn.star:hover { background: rgba(251, 191, 36, .16); color: var(--warn); }
+.icon-btn.star.on { color: var(--warn); }
+.icon-btn.star.on svg { fill: currentColor; stroke-width: 1.2; }
+.icon-btn.star.on:hover { background: rgba(251, 191, 36, .2); }
 
 /* ---------------------------------------------------------------- 表格 */
 
@@ -419,6 +430,14 @@ svg use { pointer-events: none; }
 .grid.c4 { grid-template-columns: repeat(4, 1fr); }
 @media (max-width: 1100px) { .grid.c4 { grid-template-columns: repeat(2, 1fr); } .grid.c3 { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 720px) { .grid.c2, .grid.c3, .grid.c4 { grid-template-columns: 1fr; } }
+
+/* 系统设置页：两列底边自动对齐。
+   做法：两侧的列都撑满同一行高，列内「最后一张卡片」吸收剩余空间，
+   因此底边永远齐平，且不依赖写死的像素高度（卡片内容变化也不会失衡）。 */
+.setgrid { align-items: stretch; }
+.setgrid > .setcol { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.setcard-grow { display: flex; flex-direction: column; flex: 1; }
+.setlog { flex: 1 1 auto; min-height: 200px; margin-top: 10px; }
 
 /* 统计大卡 */
 .stat-card {
@@ -870,6 +889,9 @@ svg use { pointer-events: none; }
 [data-theme="light"] .field input, [data-theme="light"] .field select, [data-theme="light"] .field textarea { background: #fff; }
 [data-theme="light"] .field select option { background: #fff; color: var(--fg); }
 [data-theme="light"] .modal, [data-theme="light"] .drawer, [data-theme="light"] .menu, [data-theme="light"] .toast { background: rgba(255, 255, 255, .97); }
+[data-theme="light"] .icon-btn.star.on { color: #d97706; }
+[data-theme="light"] .icon-btn.star:hover,
+[data-theme="light"] .icon-btn.star.on:hover { background: rgba(217, 119, 6, .14); }
 [data-theme="light"] .toast { color: var(--fg); }
 [data-theme="light"] .drawer { border-left-color: var(--stroke); }
 [data-theme="light"] .login-card { background: rgba(255, 255, 255, .9); }
@@ -895,8 +917,11 @@ svg use { pointer-events: none; }
 @media (max-width: 900px) {
   :root { --side-w: 64px; }
   .side-brand h1, .side-brand p, .nav-item span, .nav-group, .side-foot .ver { display: none; }
-  .side-brand { justify-content: center; padding: 12px 0; }
+  .side-brand { justify-content: center; padding: 0; }
   .nav-item { justify-content: center; padding: 0; }
+  /* 底部「深色/浅色」「退出登录」也要收起文字，否则 64px 栏里文字会互相压叠 */
+  .side-foot .btn span { display: none; }
+  .side-foot .btn { justify-content: center; padding: 0; }
   .kv { grid-template-columns: 110px 1fr; }
   .port-cols { grid-template-columns: 1fr; }
   .port-panel .tscroll { max-height: none; }

@@ -203,8 +203,10 @@ func (a *App) taskExecute(w http.ResponseWriter, r *http.Request, id string) {
 		err = a.Docker.ContainerAction(target.Name, target.Action, 10)
 	case "update":
 		if !a.Tasks.Start("update:"+target.Name, func(progress func(msg string, status string, pct int)) {
-			if e := a.recreateWithLatestImage(target.Name, progress); e != nil {
+			if _, e := a.recreateWithLatestImage(target.Name, progress); e != nil {
 				a.Logs.Add("ERROR", "任务更新失败 ["+target.Name+"]: "+e.Error(), "realtime")
+			} else {
+				a.Logs.Add("SUCCESS", "任务更新完成 ["+target.Name+"]", "realtime")
 			}
 		}) {
 			fail(w, 429, "该容器的更新任务已在进行中")
