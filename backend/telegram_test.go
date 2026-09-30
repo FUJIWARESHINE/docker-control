@@ -202,10 +202,10 @@ func TestTGAllowedChat(t *testing.T) {
 // TestShellQuote 校验命令注入防护
 func TestShellQuote(t *testing.T) {
 	cases := map[string]string{
-		"/etc/foo":            "'/etc/foo'",
-		"/tmp/a'b":            `'/tmp/a'\''b'`,
-		"/tmp/; rm -rf /":     "'/tmp/; rm -rf /'",
-		"/tmp/$(whoami)":      "'/tmp/$(whoami)'",
+		"/etc/foo":        "'/etc/foo'",
+		"/tmp/a'b":        `'/tmp/a'\''b'`,
+		"/tmp/; rm -rf /": "'/tmp/; rm -rf /'",
+		"/tmp/$(whoami)":  "'/tmp/$(whoami)'",
 	}
 	for in, want := range cases {
 		if got := shellQuote(in); got != want {

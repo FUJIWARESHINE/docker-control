@@ -30,7 +30,9 @@ import (
 // base64Encode / base64Decode 便于在宿主机命令里安全传递文件内容
 func base64Encode(b []byte) string { return base64.StdEncoding.EncodeToString(b) }
 
-func base64Decode(s string) ([]byte, error) { return base64.StdEncoding.DecodeString(strings.TrimSpace(s)) }
+func base64Decode(s string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(strings.TrimSpace(s))
+}
 
 // hostExecImage 执行宿主机命令所用的镜像。
 // 优先用面板自身镜像：本地已存在、必然有 shell，避免运行时联网拉取。
@@ -253,7 +255,7 @@ func (a *App) selfImageName() string {
 	}
 	defer resp.Body.Close()
 	var info struct {
-		Image string `json:"Image"`
+		Image  string `json:"Image"`
 		Config struct {
 			Image string `json:"Image"`
 		} `json:"Config"`

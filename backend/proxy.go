@@ -31,7 +31,7 @@ type ProxyConfig struct {
 	HTTP     string `json:"http_proxy"`
 	HTTPS    string `json:"https_proxy"`
 	NoProxy  string `json:"no_proxy"`
-	Applied  bool   `json:"applied"`  // 配置文件是否存在
+	Applied  bool   `json:"applied"`   // 配置文件是否存在
 	HostPath string `json:"host_path"` // 宿主机上的真实路径
 }
 

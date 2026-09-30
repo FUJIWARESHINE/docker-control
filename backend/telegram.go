@@ -214,9 +214,9 @@ func (a *App) tgSend(text string) error {
 		return fmt.Errorf("未配置 Chat ID")
 	}
 	_, err := a.tgAPI("sendMessage", map[string]any{
-		"chat_id":    cfg.ChatID,
-		"text":       text,
-		"parse_mode": "HTML",
+		"chat_id":              cfg.ChatID,
+		"text":                 text,
+		"parse_mode":           "HTML",
 		"link_preview_options": map[string]any{"is_disabled": true},
 	})
 	return err
@@ -225,9 +225,9 @@ func (a *App) tgSend(text string) error {
 // tgSendKB 发送带 Inline Keyboard 的消息
 func (a *App) tgSendKB(chatID int64, text string, kb [][]map[string]any) error {
 	payload := map[string]any{
-		"chat_id":    chatID,
-		"text":       text,
-		"parse_mode": "HTML",
+		"chat_id":              chatID,
+		"text":                 text,
+		"parse_mode":           "HTML",
 		"link_preview_options": map[string]any{"is_disabled": true},
 	}
 	if len(kb) > 0 {
@@ -240,10 +240,10 @@ func (a *App) tgSendKB(chatID int64, text string, kb [][]map[string]any) error {
 // tgEditKB 原地替换消息内容（用于按钮翻页/返回，避免刷屏）
 func (a *App) tgEditKB(chatID, msgID int64, text string, kb [][]map[string]any) error {
 	payload := map[string]any{
-		"chat_id":    chatID,
-		"message_id": msgID,
-		"text":       text,
-		"parse_mode": "HTML",
+		"chat_id":              chatID,
+		"message_id":           msgID,
+		"text":                 text,
+		"parse_mode":           "HTML",
 		"link_preview_options": map[string]any{"is_disabled": true},
 	}
 	if len(kb) > 0 {
@@ -339,9 +339,9 @@ func (a *App) tgNotify(kind, text string) {
 // tgRefMap 维护「短引用 → 容器名」的映射。
 // 每次渲染容器列表时重建，避免容器名过长撑爆 callback_data。
 var (
-	tgRefMu   sync.Mutex
-	tgRefMap  = map[string]string{}
-	tgRefSeq  int
+	tgRefMu  sync.Mutex
+	tgRefMap = map[string]string{}
+	tgRefSeq int
 )
 
 // tgMakeRef 为容器名分配（或复用）一个短引用，形如 r1、r2，长度恒 ≤ 3 字符。
@@ -842,7 +842,7 @@ func (a *App) StartTelegramBot() {
 
 // tgUpdate 覆盖消息与按钮回调两类更新
 type tgUpdate struct {
-	UpdateID      int64 `json:"update_id"`
+	UpdateID      int64      `json:"update_id"`
 	Message       *tgMessage `json:"message"`
 	CallbackQuery *struct {
 		ID      string `json:"id"`
@@ -907,16 +907,16 @@ func (a *App) tgLoop() {
 					chatID = cq.Message.Chat.ID
 					msgID = cq.Message.MessageID
 				}
-			if !a.tgAllowedChat(cfg, chatID) {
-				a.Logs.Add("WARNING", fmt.Sprintf("Telegram 回调被拒绝（非白名单会话 %d）", chatID), "realtime")
+				if !a.tgAllowedChat(cfg, chatID) {
+					a.Logs.Add("WARNING", fmt.Sprintf("Telegram 回调被拒绝（非白名单会话 %d）", chatID), "realtime")
+					continue
+				}
+				a.Logs.Add("INFO", "Telegram 按钮点击: "+cq.Data, "realtime")
+				text, kb := a.tgHandleCallback(cq.Data)
+				if err := a.tgEditKB(chatID, msgID, text, kb); err != nil {
+					a.Logs.Add("WARNING", "Telegram 消息更新失败: "+err.Error(), "realtime")
+				}
 				continue
-			}
-			a.Logs.Add("INFO", "Telegram 按钮点击: "+cq.Data, "realtime")
-			text, kb := a.tgHandleCallback(cq.Data)
-			if err := a.tgEditKB(chatID, msgID, text, kb); err != nil {
-				a.Logs.Add("WARNING", "Telegram 消息更新失败: "+err.Error(), "realtime")
-			}
-			continue
 			}
 
 			// ---- 文本消息 ----
