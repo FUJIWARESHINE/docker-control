@@ -62,7 +62,103 @@ type updateResult struct {
 	CheckMethod   string `json:"check_method"`
 }
 
-// registryDigest 查询远程 manifest digest（docker.io 匿名可读）
+// parseAuthChallenge 解析 registry 的 WWW-Authenticate 挑战头，提取 Bearer 认证三要素。
+//
+// 形如：Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:foo/bar:pull"
+// realm 是取 token 的地址，各 registry 各不相同（Docker Hub 是 auth.docker.io，
+// GHCR 是 ghcr.io/token，Quay 是 quay.io/v2/auth），因此绝不能硬编码。
+// 值内部可能含逗号（scope 不会，但 realm 的 query 有可能），故按引号状态切分。
+func parseAuthChallenge(h string) (realm, service, scope string) {
+	h = strings.TrimSpace(h)
+	const prefix = "bearer "
+	if len(h) < len(prefix) || !strings.EqualFold(h[:len(prefix)], prefix) {
+		return "", "", ""
+	}
+	rest := h[len(prefix):]
+	var parts []string
+	var cur strings.Builder
+	inQuote := false
+	for _, r := range rest {
+		switch {
+		case r == '"':
+			inQuote = !inQuote
+			cur.WriteRune(r)
+		case r == ',' && !inQuote:
+			parts = append(parts, cur.String())
+			cur.Reset()
+		default:
+			cur.WriteRune(r)
+		}
+	}
+	if cur.Len() > 0 {
+		parts = append(parts, cur.String())
+	}
+	for _, p := range parts {
+		k, v, found := strings.Cut(p, "=")
+		if !found {
+			continue
+		}
+		k = strings.ToLower(strings.TrimSpace(k))
+		v = strings.Trim(strings.TrimSpace(v), `"`)
+		switch k {
+		case "realm":
+			realm = v
+		case "service":
+			service = v
+		case "scope":
+			scope = v
+		}
+	}
+	return realm, service, scope
+}
+
+// fetchRegistryToken 向挑战头给出的 realm 换取匿名 pull token。
+// 响应同时兼容 token / access_token 两种字段名（Docker Hub 用 token，部分 registry 用 access_token）。
+func fetchRegistryToken(client *http.Client, realm, service, scope string) (string, error) {
+	if realm == "" {
+		return "", fmt.Errorf("registry 未提供认证 realm")
+	}
+	u, err := url.Parse(realm)
+	if err != nil {
+		return "", err
+	}
+	q := u.Query()
+	if service != "" {
+		q.Set("service", service)
+	}
+	if scope != "" {
+		q.Set("scope", scope)
+	}
+	u.RawQuery = q.Encode()
+	resp, err := client.Get(u.String())
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("token 接口返回 HTTP %d", resp.StatusCode)
+	}
+	var tj struct {
+		Token       string `json:"token"`
+		AccessToken string `json:"access_token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&tj); err != nil {
+		return "", err
+	}
+	if tj.Token != "" {
+		return tj.Token, nil
+	}
+	if tj.AccessToken != "" {
+		return tj.AccessToken, nil
+	}
+	return "", fmt.Errorf("token 响应中无 token 字段")
+}
+
+// registryDigest 查询远程 manifest digest（任何匿名可读 registry 通用）。
+//
+// 采用标准的「挑战—应答」流程：先匿名请求 manifest，若被 401 拒绝，
+// 就从 WWW-Authenticate 头里读出该 registry 自己的 realm 去换 token，再重试一次。
+// 这样 Docker Hub / GHCR / Quay / 私有 registry 全都适用，无需为每个 host 写分支。
 func registryDigest(image string) (string, error) {
 	repo, tag := parseImage(image)
 	host := "registry-1.docker.io"
@@ -73,28 +169,55 @@ func registryDigest(image string) (string, error) {
 	} else if !strings.Contains(repo, "/") {
 		scopeRepo = "library/" + repo
 	}
-	client := &http.Client{Timeout: 20 * time.Second}
-	req, _ := http.NewRequest("GET", fmt.Sprintf("https://%s/v2/%s/manifests/%s", host, scopeRepo, tag), nil)
-	req.Header.Set("Accept", "application/vnd.docker.distribution.manifest.v2+json,application/vnd.oci.image.index.v1+json,application/vnd.oci.image.manifest.v1+json")
-	if host == "registry-1.docker.io" {
-		tr, err := client.Get(fmt.Sprintf("https://auth.docker.io/token?service=registry.docker.io&scope=repository:%s:pull", scopeRepo))
-		if err == nil {
-			var tj struct {
-				Token string `json:"token"`
-			}
-			json.NewDecoder(tr.Body).Decode(&tj)
-			tr.Body.Close()
-			if tj.Token != "" {
-				req.Header.Set("Authorization", "Bearer "+tj.Token)
-			}
-		}
+	// docker.io 是 index.docker.io 的别名，真正的 API 端点是 registry-1.docker.io
+	if host == "docker.io" || host == "index.docker.io" {
+		host = "registry-1.docker.io"
 	}
-	resp, err := client.Do(req)
+	client := &http.Client{Timeout: 20 * time.Second}
+	manifestURL := fmt.Sprintf("https://%s/v2/%s/manifests/%s", host, scopeRepo, tag)
+	const accept = "application/vnd.docker.distribution.manifest.v2+json," +
+		"application/vnd.docker.distribution.manifest.list.v2+json," +
+		"application/vnd.oci.image.index.v1+json," +
+		"application/vnd.oci.image.manifest.v1+json"
+
+	doReq := func(token string) (*http.Response, error) {
+		req, err := http.NewRequest("GET", manifestURL, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Accept", accept)
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+		return client.Do(req)
+	}
+
+	resp, err := doReq("")
 	if err != nil {
 		return "", err
 	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		challenge := resp.Header.Get("WWW-Authenticate")
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		realm, service, scope := parseAuthChallenge(challenge)
+		if scope == "" {
+			scope = "repository:" + scopeRepo + ":pull"
+		}
+		token, terr := fetchRegistryToken(client, realm, service, scope)
+		if terr != nil {
+			return "", fmt.Errorf("获取 %s 的 registry token 失败: %w", host, terr)
+		}
+		resp, err = doReq(token)
+		if err != nil {
+			return "", err
+		}
+	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("registry 返回 HTTP %d", resp.StatusCode)
+	}
 	dg := resp.Header.Get("Docker-Content-Digest")
 	if dg == "" {
 		return "", fmt.Errorf("no digest header")

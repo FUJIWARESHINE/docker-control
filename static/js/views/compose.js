@@ -28,15 +28,16 @@
             card.className = 'card';
             const cons = (p.containers || []).map(c =>
               `<span class="badge ${UI.esc(c.state === 'running' ? 'ok' : 'stopped')}" style="margin:2px">${UI.esc(c.name)}</span>`).join('');
-            card.innerHTML = `
-              <div style="display:flex;align-items:center;gap:8px">
-                <h4 style="flex:1"></h4>
-                ${UI.stateBadge(p.state)}
-                <span class="badge brand">${p.running_count}/${p.container_count}</span>
-              </div>
-              <p class="muted mono" style="margin:4px 0 8px">${UI.esc(p.compose_filename || '')} · ${UI.esc(p.path || '')}</p>
-              <div style="margin-bottom:12px">${cons}</div>
+            // 自保护：面板自身所在项目禁用「启停 / Down」——后端也会 403，
+            // 这里同步隐藏按钮，避免用户点了才被拒绝。
+            const isSelf = !!p.self;
+            const acts = isSelf
+              ? `<div class="muted" style="font-size:12px;margin-bottom:8px">🛡 面板自身项目，启停 / 移除已禁用（更新请用「更新中心」的重建式更新）</div>
               <div style="display:flex;gap:6px;flex-wrap:wrap">
+                <button type="button" class="btn small ghost" data-act="file"><svg><use href="#i-edit"/></svg><span>编辑</span></button>
+                <button type="button" class="btn small ghost" data-act="logs"><svg><use href="#i-log"/></svg><span>日志</span></button>
+              </div>`
+              : `<div style="display:flex;gap:6px;flex-wrap:wrap">
                 <button type="button" class="btn small ok" data-act="start"><svg><use href="#i-play"/></svg><span>启动</span></button>
                 <button type="button" class="btn small" data-act="stop"><svg><use href="#i-stop"/></svg><span>停止</span></button>
                 <button type="button" class="btn small" data-act="restart"><svg><use href="#i-restart"/></svg><span>重启</span></button>
@@ -44,6 +45,16 @@
                 <button type="button" class="btn small ghost" data-act="file"><svg><use href="#i-edit"/></svg><span>编辑</span></button>
                 <button type="button" class="btn small ghost" data-act="logs"><svg><use href="#i-log"/></svg><span>日志</span></button>
               </div>`;
+            card.innerHTML = `
+              <div style="display:flex;align-items:center;gap:8px">
+                <h4 style="flex:1"></h4>
+                ${isSelf ? '<span class="badge cyan">自我保护</span>' : ''}
+                ${UI.stateBadge(p.state)}
+                <span class="badge brand">${p.running_count}/${p.container_count}</span>
+              </div>
+              <p class="muted mono" style="margin:4px 0 8px">${UI.esc(p.compose_filename || '')} · ${UI.esc(p.path || '')}</p>
+              <div style="margin-bottom:12px">${cons}</div>
+              ${acts}`;
             card.querySelector('h4').textContent = p.name;
             card.querySelectorAll('button[data-act]').forEach(btn => {
               btn.addEventListener('click', () => act(btn.dataset.act, p));
@@ -87,6 +98,10 @@
             m.mask.querySelector('.logview').textContent = t || '(无日志)';
           } catch (e) { UI.toast(e.message, 'error'); }
           return;
+        }
+        // 自保护（前端兜底）：面板自身项目禁止启停 / 移除，与后端 403 一致
+        if (p.self && ['start', 'stop', 'restart', 'down'].includes(kind)) {
+          return UI.toast('自保护：面板自身项目不允许启停 / 移除', 'error');
         }
         if (kind === 'down' && !await UI.confirm('Down 项目', `停止并移除项目「${p.name}」的所有容器？`, true)) return;
         try {

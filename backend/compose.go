@@ -21,6 +21,7 @@ func (a *App) composeProjects() []map[string]any {
 		name, composeFile, workdir string
 		containers                 []map[string]any
 		minCreated                 int64
+		hasSelf                    bool // 项目内含面板自身容器
 	}
 	projects := map[string]*proj{}
 	for _, c := range cs {
@@ -40,6 +41,10 @@ func (a *App) composeProjects() []map[string]any {
 		p := projects[pn]
 		if c.Created < p.minCreated {
 			p.minCreated = c.Created
+		}
+		// 标记含面板自身的项目，供前端隐藏启停按钮、后端拒绝项目级生命周期操作
+		if c.Labels["docker-control.self"] == "true" || name == a.SelfName {
+			p.hasSelf = true
 		}
 		p.containers = append(p.containers, map[string]any{
 			"name": name, "state": c.State, "status": c.Status,
@@ -70,6 +75,7 @@ func (a *App) composeProjects() []map[string]any {
 			"container_count":  len(p.containers),
 			"running_count":    running,
 			"state":            state,
+			"self":             p.hasSelf,
 			"created_at":       fmt.Sprint(p.minCreated),
 		})
 	}
@@ -87,6 +93,13 @@ func (a *App) handleComposeProjects(w http.ResponseWriter, r *http.Request) {
 }
 
 // composeAction POST /api/compose/{project}/{action}
+//
+// 动作：start / stop / restart / down / status
+// 自保护：项目内含面板自身容器（docker-control.self=true）时，拒绝一切生命
+// 周期操作。容器级接口（containerAction / containerDelete）已有同样的 403 保护，
+// 但项目级是按 compose label 聚合的，绕过了那层校验 —— 其中 down 会直接移除
+// 面板自身的容器，而 restart:always 对「已删除」的容器无效，面板将永久消失；
+// stop / restart 则会打断正在处理这次请求的进程（表现为连接被重置）。
 func (a *App) composeAction(w http.ResponseWriter, r *http.Request, project, action string) {
 	cs, err := a.Docker.ListContainers(true)
 	if err != nil {
@@ -94,17 +107,38 @@ func (a *App) composeAction(w http.ResponseWriter, r *http.Request, project, act
 		return
 	}
 	targets := []string{}
+	hasSelf := false
 	for _, c := range cs {
 		if c.Labels["com.docker.compose.project"] == project {
-			targets = append(targets, containerName(c))
+			name := containerName(c)
+			if c.Labels["docker-control.self"] == "true" || name == a.SelfName {
+				hasSelf = true
+			}
+			targets = append(targets, name)
 		}
 	}
 	if len(targets) == 0 {
 		fail(w, 404, "项目不存在或没有容器")
 		return
 	}
+	if hasSelf {
+		a.Logs.Add("WARNING", fmt.Sprintf("已拦截 Compose 项目 [%s] 的 %s 操作（项目含面板自身容器）", project, action), "realtime")
+		fail(w, 403, "自保护：项目 "+project+" 包含 docker-control 面板自身容器，禁止执行 "+action+
+			"。如需更新面板请使用「更新中心」的重建式更新，或在宿主机执行 docker compose 命令。")
+		return
+	}
 	var opErr error
 	switch action {
+	case "status":
+		// 只读：返回项目概览，不做任何变更
+		running := 0
+		for _, c := range cs {
+			if c.Labels["com.docker.compose.project"] == project && c.State == "running" {
+				running++
+			}
+		}
+		ok(w, map[string]any{"project": project, "containers": targets, "running_count": running})
+		return
 	case "start", "restart":
 		for _, t := range targets {
 			if e := a.Docker.ContainerAction(t, action, 0); e != nil {
